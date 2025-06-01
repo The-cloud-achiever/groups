@@ -1,0 +1,23 @@
+trigger:
+  branches:
+    include:
+      - main  # or your branch name
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+steps:
+- task: UsePythonVersion@0
+  inputs:
+    versionSpec: '3.11'
+
+- script: |
+    pip install -r requirements.txt
+    python your_script.py
+  displayName: 'Run Snapshot Script'
+
+- task: PublishBuildArtifacts@1
+  inputs:
+    PathtoPublish: 'snapshot_latest.json'
+    ArtifactName: 'snapshots'
+    publishLocation: 'Container'
