@@ -1,10 +1,13 @@
 trigger:
   branches:
     include:
-      - main  # or your branch name
+      - main
 
 pool:
   vmImage: 'ubuntu-latest'
+
+variables:
+  snapshotFileName: "snapshot_latest.json"
 
 steps:
 - task: UsePythonVersion@0
@@ -12,12 +15,25 @@ steps:
     versionSpec: '3.11'
 
 - script: |
-    pip install -r requirements.txt
+    python -m pip install -r requirements.txt
+  displayName: 'Install dependencies'
+
+- task: DownloadBuildArtifacts@0
+  inputs:
+    buildType: 'current'
+    artifactName: 'snapshots'
+    downloadPath: '$(Pipeline.Workspace)/downloaded'
+  continueOnError: true
+  displayName: 'Download previous snapshot artifact'
+
+- script: |
+    cp $(Pipeline.Workspace)/downloaded/snapshot_latest.json snapshot_latest.json || echo "No previous snapshot found. Starting fresh."
     python your_script.py
-  displayName: 'Run Snapshot Script'
+  displayName: 'Run snapshot script'
 
 - task: PublishBuildArtifacts@1
   inputs:
-    PathtoPublish: 'snapshot_latest.json'
+    PathtoPublish: '.'
     ArtifactName: 'snapshots'
     publishLocation: 'Container'
+  displayName: 'Publish new snapshot artifact'
