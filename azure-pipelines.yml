@@ -50,6 +50,10 @@ stages:
 
     # Step 4: Run the group report script
     - script: |
+      echo Current directory: %CD%
+      dir /s /b get_test_with_updates.py
+      displayName: 'Verify script path and working directory'
+    - script: |
         python get_test_with_updates.py
       displayName: 'Generate Group Report'
       env:
