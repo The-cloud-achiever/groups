@@ -5,15 +5,14 @@ import base64
 import os
 import json
 import pdfkit
-from tabulate import tabulate
 import copy
 from azure.storage.blob import BlobServiceClient
 #-------------------------- CONFIGURATION -----------------------
 
 # Entra stuff
-TENANT_ID = "66576a43-4694-4f10-9c82-043ade5de9e8"
-CLIENT_ID= "3442c453-4849-427c-b76a-4fc1aa9b0b5d"
-CLIENT_SECRET = "TPs8Q~ONu~ehezBlW8-H94gGcjUtBfr0Ttb.xdow"
+#TENANT_ID = "66576a43-4694-4f10-9c82-043ade5de9e8"
+#CLIENT_ID= "3442c453-4849-427c-b76a-4fc1aa9b0b5d"
+#CLIENT_SECRET = "TPs8Q~ONu~ehezBlW8-H94gGcjUtBfr0Ttb.xdow"
 
 # Graph stuff
 GROUPS_ENDPOINT = "https://graph.microsoft.com/v1.0/groups?$"
@@ -52,12 +51,19 @@ EMAIL_TEMPLATE = {
 
 # ----------------------- AUTHENTICATION -----------------------
 def get_token():
-
     """
-    Get an Azure AD token using client credentials.
+    Get an Azure AD token using client credentials from pipeline variables.
     """
-    authority = f"https://login.microsoftonline.com/{TENANT_ID}"
-    app = ConfidentialClientApplication(CLIENT_ID, CLIENT_SECRET, authority=authority)
+    # Get credentials from pipeline environment variables
+    tenant_id = os.environ.get('TENANT_ID')
+    client_id = os.environ.get('CLIENT_ID') 
+    client_secret = os.environ.get('CLIENT_SECRET')
+    
+    if not all([tenant_id, client_id, client_secret]):
+        raise Exception("Missing required environment variables: TENANT_ID, CLIENT_ID, CLIENT_SECRET")
+    
+    authority = f"https://login.microsoftonline.com/{tenant_id}"
+    app = ConfidentialClientApplication(client_id, client_secret, authority=authority)
     token_result = app.acquire_token_for_client(scopes=["https://graph.microsoft.com/.default"])
     
     if "access_token" in token_result:
@@ -68,11 +74,16 @@ def get_token():
 # ----------------------- GROUP DATA FETCHING -----------------------
 def get_groups():
     """
-    Fetch all Azure AD groups that match the FILTER query.
+    Fetch all Azure AD groups that match the filter query.
     """
     token = get_token()
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-    url = f"{GROUPS_ENDPOINT}{FILTER}"
+    
+    # Get filter from environment variable or use default
+    filter_query = os.environ.get('GROUPS_FILTER', '')
+    groups_endpoint = "https://graph.microsoft.com/v1.0/groups"
+    url = f"{groups_endpoint}?{filter_query}" if filter_query else groups_endpoint
+    
     response = req.get(url, headers=headers)
 
     if response.status_code == 200:
@@ -126,97 +137,184 @@ def get_all_group_members():
 
     return group_members
 
+# ----------------------- PIPELINE ARTIFACT FUNCTIONS -----------------------
+def load_previous_snapshot():
+    """
+    Load the previous snapshot from pipeline artifacts directory.
+    In Azure Pipelines, we'll check if a previous snapshot exists.
+    """
+    artifacts_dir = os.environ.get('PIPELINE_WORKSPACE', './artifacts')
+    previous_snapshot_path = os.path.join(artifacts_dir, 'previous_snapshot.json')
+    
+    if os.path.exists(previous_snapshot_path):
+        print(f"📂 Loading previous snapshot from: {previous_snapshot_path}")
+        try:
+            with open(previous_snapshot_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"⚠️ Error loading previous snapshot: {e}")
+            return {}
+    else:
+        print("📂 No previous snapshot found, treating as initial run")
+        return {}
+
+def save_current_as_previous(current_snapshot, artifacts_dir):
+    """
+    Save current snapshot as previous for next pipeline run.
+    """
+    previous_snapshot_path = os.path.join(artifacts_dir, 'previous_snapshot.json')
+    with open(previous_snapshot_path, 'w', encoding='utf-8') as f:
+        json.dump(current_snapshot, f, indent=2)
+    print(f"💾 Saved current snapshot as previous: {previous_snapshot_path}")
+
 # ----------------------- SNAPSHOT COMPARISON -----------------------
 def generate_snapshot(current, previous):
     """Generate a comparison snapshot showing added, removed, and unchanged group members."""
     snapshot = {}
     all_groups = set(current.keys()).union(previous.keys())
+    
+    changes_detected = False
+    
     for group in all_groups:
         cur = set(current.get(group, []))
         prev = set(previous.get(group, []))
         added = cur - prev
         removed = prev - cur
         unchanged = cur & prev
-        snapshot[group] = (
-            [f"{m} (new)" for m in sorted(added)] +
-            [f"{m} (removed)" for m in sorted(removed)] +
-            sorted(unchanged)
-        )
-    return snapshot
+        
+        if added or removed:
+            changes_detected = True
+        
+        snapshot[group] = {
+            'added': sorted(list(added)),
+            'removed': sorted(list(removed)),
+            'unchanged': sorted(list(unchanged)),
+            'total_members': len(cur)
+        }
+    
+    return snapshot, changes_detected
 
-def generate_pdf(snapshot, output_file, wkhtmltopdf_path):
-    """Convert the snapshot dictionary to an HTML report and generate a PDF file."""
-    html = """
-    <html><head><style>
-    body { font-family: Arial; }
-    .new { color: green; }
-    .removed { color: orange; }
-    </style></head><body><h1>Azure AD Group Report</h1>
+def generate_comparison_report(snapshot, changes_detected):
+    """Generate a readable comparison report."""
+    report_lines = []
+    report_lines.append("# Azure AD Group Membership Report")
+    report_lines.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    report_lines.append("")
+    
+    if not changes_detected:
+        report_lines.append("✅ No changes detected in group memberships.")
+        report_lines.append("")
+    
+    total_groups = len(snapshot)
+    groups_with_changes = sum(1 for group_data in snapshot.values() 
+                             if group_data['added'] or group_data['removed'])
+    
+    report_lines.append(f"## Summary")
+    report_lines.append(f"- Total Groups: {total_groups}")
+    report_lines.append(f"- Groups with Changes: {groups_with_changes}")
+    report_lines.append("")
+    
+    for group_name, group_data in snapshot.items():
+        if group_data['added'] or group_data['removed'] or not changes_detected:
+            report_lines.append(f"## {group_name}")
+            report_lines.append(f"Total Members: {group_data['total_members']}")
+            
+            if group_data['added']:
+                report_lines.append(f"### ➕ Added Members ({len(group_data['added'])})")
+                for member in group_data['added']:
+                    report_lines.append(f"- {member}")
+                report_lines.append("")
+            
+            if group_data['removed']:
+                report_lines.append(f"### ➖ Removed Members ({len(group_data['removed'])})")
+                for member in group_data['removed']:
+                    report_lines.append(f"- {member}")
+                report_lines.append("")
+            
+            if group_data['unchanged'] and not changes_detected:
+                report_lines.append(f"### 👥 Current Members ({len(group_data['unchanged'])})")
+                for member in group_data['unchanged']:
+                    report_lines.append(f"- {member}")
+                report_lines.append("")
+            
+            report_lines.append("---")
+            report_lines.append("")
+    
+    return '\n'.join(report_lines)
+
+# ----------------------- MAIN PIPELINE FUNCTION -----------------------
+def main():
     """
-    for group, members in snapshot.items():
-        html += f"<h2>{group}</h2><ul>"
-        for m in members:
-            cls = "new" if m.endswith("(new)") else "removed" if m.endswith("(removed)") else ""
-            html += f"<li class='{cls}'>{m}</li>"
-        html += "</ul>"
-    html += "</body></html>"
-    config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
-    pdfkit.from_string(html, output_file, configuration=config)
+    Main function to run the group report generation in Azure Pipeline.
+    """
+    # Set up artifacts directory
+    artifacts_dir = os.environ.get('BUILD_ARTIFACTSTAGINGDIRECTORY', './pipeline-artifacts')
+    os.makedirs(artifacts_dir, exist_ok=True)
+    
+    # Generate timestamp for this run
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    try:
+        print("🚀 Starting Azure AD Group Report Generation")
+        print(f"📁 Artifacts directory: {artifacts_dir}")
+        
+        # Step 1: Fetch current group members
+        print("📥 Fetching current group members...")
+        current = get_all_group_members()
+        print(f"✅ Fetched members for {len(current)} groups")
+        
+        # Step 2: Load previous snapshot
+        print("📤 Loading previous snapshot...")
+        previous = load_previous_snapshot()
+        
+        # Step 3: Generate comparison snapshot
+        print("🔄 Generating comparison snapshot...")
+        snapshot, changes_detected = generate_snapshot(current, previous)
+        
+        # Step 4: Generate reports
+        print("📝 Generating reports...")
+        
+        # Save detailed snapshot as JSON
+        snapshot_json_file = os.path.join(artifacts_dir, f"group_snapshot_{timestamp}.json")
+        with open(snapshot_json_file, "w", encoding="utf-8") as f:
+            json.dump(snapshot, f, indent=2)
+        print(f"💾 Saved detailed snapshot: {snapshot_json_file}")
+        
+        # Generate readable report
+        report_content = generate_comparison_report(snapshot, changes_detected)
+        report_file = os.path.join(artifacts_dir, f"group_report_{timestamp}.md")
+        with open(report_file, "w", encoding="utf-8") as f:
+            f.write(report_content)
+        print(f"📄 Generated report: {report_file}")
+        
+        # Save current data as raw JSON for troubleshooting
+        raw_data_file = os.path.join(artifacts_dir, f"raw_group_data_{timestamp}.json")
+        with open(raw_data_file, "w", encoding="utf-8") as f:
+            json.dump(current, f, indent=2)
+        print(f"🔧 Saved raw data: {raw_data_file}")
+        
+        # Step 5: Save current snapshot as previous for next run
+        save_current_as_previous(current, artifacts_dir)
+        
+        # Step 6: Set pipeline variables for downstream tasks
+        if changes_detected:
+            print("##vso[task.setvariable variable=GroupChangesDetected;isOutput=true]true")
+            print(f"##vso[task.setvariable variable=GroupsChanged;isOutput=true]{groups_with_changes}")
+        else:
+            print("##vso[task.setvariable variable=GroupChangesDetected;isOutput=true]false")
+            print("##vso[task.setvariable variable=GroupsChanged;isOutput=true]0")
+        
+        print("✅ Group report generation completed successfully!")
+        
+        if changes_detected:
+            print(f"⚠️ Changes detected in {groups_with_changes} groups")
+        else:
+            print("ℹ️ No changes detected")
+            
+    except Exception as e:
+        print(f"❌ Error during execution: {str(e)}")
+        print("##vso[task.logissue type=error]Group report generation failed")
+        raise
 
-def upload_to_blob(local_path, blob_name):
-    """Upload a local file to Azure Blob Storage under the specified blob name."""
-    blob_service = BlobServiceClient.from_connection_string(STORAGE_CONNECTION_STRING)
-    blob_client = blob_service.get_blob_client(CONTAINER_NAME, blob=blob_name)
-    with open(local_path, "rb") as file:
-        blob_client.upload_blob(file, overwrite=True)
-    return blob_name
-
-#def email_result(filename, blob_data):
-    """Send an email with a file attachment using Microsoft Graph API."""
-    token = get_token()
-    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-    attachment_data = base64.b64encode(blob_data).decode("utf-8")
-    email_json = copy.deepcopy(EMAIL_TEMPLATE)
-    email_json["message"]["toRecipients"] = [{"emailAddress": {"address": r}} for r in RECIPIENTS]
-    email_json["message"]["attachments"][0].update({"name": filename, "contentBytes": attachment_data})
-    # Send email
-    email_endpoint = f"https://graph.microsoft.com/v1.0/users/jastivedasri25_gmail.com%23EXT%23@jastivedasri25gmail.onmicrosoft.com/sendMail"
-    #jastivedasri25_gmail.com%23EXT%23@jastivedasri25gmail.onmicrosoft.com
-
-    response = req.post(email_endpoint, headers=headers, json=email_json)
-    if response.status_code == 202:
-        print(f"Email successfully sent.")
-    else:
-        print(f"Failed to send email, please investigate or try again. Error: {response.status_code}")
-
-# ----------------------- MAIN -----------------------
-WKHTMLTOPDF_PATH = r"C:\\Users\\ikvesi\\Documents\\azure_test_scripts\\wkhtmltopdf\\bin\\wkhtmltopdf.exe"
-timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-snapshot_json_file = f"snapshot_{timestamp}.json"
-snapshot_pdf_file = f"snapshot_{timestamp}.pdf"
-
-print("📥 Fetching group members...")
-current = get_all_group_members()
-
-print("📤 Loading last snapshot...")
-previous = {}  # Can pull from blob if needed
-
-print("🔄 Generating comparison snapshot...")
-snapshot = generate_snapshot(current, previous)
-
-print("📝 Writing snapshot to local JSON for upload...")
-with open(snapshot_json_file, "w", encoding="utf-8") as f:
-    json.dump(snapshot, f, indent=2)
-
-print("📄 Generating PDF...")
-generate_pdf(snapshot, snapshot_pdf_file, WKHTMLTOPDF_PATH)
-
-print("☁️ Uploading to Azure Blob...")
-json_blob_name = upload_to_blob(snapshot_json_file, snapshot_json_file)
-pdf_blob_name = upload_to_blob(snapshot_pdf_file, snapshot_pdf_file)
-
-#print("📧 Sending email with PDF attached...")
-#with open(snapshot_pdf_file, "rb") as file:
-   # email_result(snapshot_pdf_file, file.read())
-
-print("✅ All done. Snapshots uploaded and email sent.")
+if __name__ == "__main__":
+    main()

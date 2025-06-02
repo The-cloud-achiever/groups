@@ -1,39 +1,149 @@
+# azure-pipelines.yml
 trigger:
   branches:
     include:
-      - main
+    - main
+    - master
+  paths:
+    include:
+    - group_report_script.py  # Trigger when script changes
+    - azure-pipelines.yml     # Trigger when pipeline changes
+
+# Optional: Schedule to run daily at 9 AM UTC
+schedules:
+- cron: "0 9 * * *"
+  displayName: Daily group report
+  branches:
+    include:
+    - main
+  always: true
+
+variables:
+- group: 'AzureAD-Secrets'  # Variable group containing your secrets
+- name: 'pythonVersion'
+  value: '3.9'
 
 pool:
   vmImage: 'ubuntu-latest'
 
-variables:
-  snapshotFileName: "snapshot_latest.json"
+stages:
+- stage: 'GenerateGroupReport'
+  displayName: 'Generate Azure AD Group Report'
+  jobs:
+  - job: 'GroupReport'
+    displayName: 'Fetch and Compare Group Memberships'
+    
+    steps:
+    # Step 1: Setup Python
+    - task: UsePythonVersion@0
+      displayName: 'Set up Python $(pythonVersion)'
+      inputs:
+        versionSpec: '$(pythonVersion)'
+        addToPath: true
 
-steps:
-- task: UsePythonVersion@0
-  inputs:
-    versionSpec: '3.11'
+    # Step 2: Install dependencies
+    - script: |
+        python -m pip install --upgrade pip
+        pip install msal requests pdfkit
+      displayName: 'Install Python dependencies'
 
-- script: |
-    python -m pip install -r requirements.txt
-  displayName: 'Install dependencies'
+    # Step 3: Download previous artifacts (if available)
+    - task: DownloadPipelineArtifact@2
+      displayName: 'Download previous snapshot'
+      inputs:
+        source: 'specific'
+        project: '$(System.TeamProject)'
+        pipeline: '$(System.DefinitionId)'
+        runVersion: 'latestFromBranch'
+        runBranch: '$(Build.SourceBranch)'
+        artifact: 'group-report-artifacts'
+        path: '$(Pipeline.Workspace)'
+      continueOnError: true  # Don't fail if no previous artifacts exist
 
-- task: DownloadBuildArtifacts@0
-  inputs:
-    buildType: 'current'
-    artifactName: 'snapshots'
-    downloadPath: '$(Pipeline.Workspace)/downloaded'
-  continueOnError: true
-  displayName: 'Download previous snapshot artifact'
+    # Step 4: Run the group report script
+    - script: |
+        python group_report_script.py
+      displayName: 'Generate Group Report'
+      env:
+        TENANT_ID: $(TENANT_ID)
+        CLIENT_ID: $(CLIENT_ID)
+        CLIENT_SECRET: $(CLIENT_SECRET)
+        GROUPS_FILTER: $(GROUPS_FILTER)  # Optional filter parameter
+        BUILD_ARTIFACTSTAGINGDIRECTORY: $(Build.ArtifactStagingDirectory)
+        PIPELINE_WORKSPACE: $(Pipeline.Workspace)
 
-- script: |
-    cp $(Pipeline.Workspace)/downloaded/snapshot_latest.json snapshot_latest.json || echo "No previous snapshot found. Starting fresh."
-    python your_script.py
-  displayName: 'Run snapshot script'
+    # Step 5: Publish artifacts
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish Group Report Artifacts'
+      inputs:
+        targetPath: '$(Build.ArtifactStagingDirectory)'
+        artifact: 'group-report-artifacts'
+        publishLocation: 'pipeline'
+      condition: always()  # Always publish artifacts even if script has warnings
 
-- task: PublishBuildArtifacts@1
-  inputs:
-    PathtoPublish: '.'
-    ArtifactName: 'snapshots'
-    publishLocation: 'Container'
-  displayName: 'Publish new snapshot artifact'
+    # Step 6: Publish test results (optional - if you want the report in Tests tab)
+    - task: PublishTestResults@2
+      displayName: 'Publish Group Changes as Test Results'
+      inputs:
+        testResultsFormat: 'JUnit'
+        testResultsFiles: '$(Build.ArtifactStagingDirectory)/**/test-results.xml'
+        mergeTestResults: true
+        testRunTitle: 'Azure AD Group Changes'
+      condition: and(succeeded(), eq(variables['GroupChangesDetected'], 'true'))
+      continueOnError: true
+
+- stage: 'NotifyOnChanges'
+  displayName: 'Notify if Changes Detected'
+  dependsOn: 'GenerateGroupReport'
+  condition: and(succeeded(), eq(dependencies.GenerateGroupReport.outputs['GroupReport.GroupChangesDetected'], 'true'))
+  jobs:
+  - job: 'NotificationJob'
+    displayName: 'Send Notifications'
+    steps:
+    
+    # Download the generated reports
+    - task: DownloadPipelineArtifact@2
+      displayName: 'Download Generated Reports'
+      inputs:
+        source: 'current'
+        artifact: 'group-report-artifacts'
+        path: '$(Pipeline.Workspace)/reports'
+
+    # Option 1: Send email using Office 365 Connector (if configured)
+    - task: EmailReport@1
+      displayName: 'Email Group Changes Report'
+      inputs:
+        sendMailConditionConfig: 'always'
+        subject: 'Azure AD Group Changes Detected - $(Build.BuildNumber)'
+        to: 'your-team@company.com'  # Replace with your email
+        body: |
+          Azure AD Group membership changes have been detected.
+          
+          Build: $(Build.BuildNumber)
+          Date: $(Build.Repository.Name)
+          
+          Please check the attached artifacts for detailed changes.
+        attachments: '$(Pipeline.Workspace)/reports/*.md'
+      continueOnError: true
+
+    # Option 2: Post to Teams (if you have Teams webhook configured)
+    - script: |
+        echo "Changes detected in $(GroupsChanged) groups"
+        echo "Posting notification to Teams..."
+        # Add your Teams webhook notification here
+      displayName: 'Post to Teams Channel'
+      condition: and(succeeded(), eq(variables['GroupChangesDetected'], 'true'))
+
+# Optional: Cleanup old artifacts (keep last 10)
+- stage: 'Cleanup'
+  displayName: 'Cleanup Old Artifacts'
+  dependsOn: 'GenerateGroupReport'
+  condition: always()
+  jobs:
+  - job: 'CleanupJob'
+    displayName: 'Cleanup Old Pipeline Runs'
+    steps:
+    - script: |
+        echo "Cleanup can be configured through Azure DevOps retention policies"
+        echo "Go to Project Settings > Pipelines > Retention to configure"
+      displayName: 'Cleanup Information'
