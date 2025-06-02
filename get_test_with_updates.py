@@ -256,42 +256,42 @@ def main():
     
     try:
         print(" Starting Azure AD Group Report Generation")
-        print(f"📁 Artifacts directory: {artifacts_dir}")
+        print(f" Artifacts directory: {artifacts_dir}")
         
         # Step 1: Fetch current group members
-        print("📥 Fetching current group members...")
+        print(" Fetching current group members...")
         current = get_all_group_members()
-        print(f"✅ Fetched members for {len(current)} groups")
+        print(f" Fetched members for {len(current)} groups")
         
         # Step 2: Load previous snapshot
-        print("📤 Loading previous snapshot...")
+        print(" Loading previous snapshot...")
         previous = load_previous_snapshot()
         
         # Step 3: Generate comparison snapshot
-        print("🔄 Generating comparison snapshot...")
+        print(" Generating comparison snapshot...")
         snapshot, changes_detected = generate_snapshot(current, previous)
         
         # Step 4: Generate reports
-        print("📝 Generating reports...")
+        print(" Generating reports...")
         
         # Save detailed snapshot as JSON
         snapshot_json_file = os.path.join(artifacts_dir, f"group_snapshot_{timestamp}.json")
         with open(snapshot_json_file, "w", encoding="utf-8") as f:
             json.dump(snapshot, f, indent=2)
-        print(f"💾 Saved detailed snapshot: {snapshot_json_file}")
+        print(f" Saved detailed snapshot: {snapshot_json_file}")
         
         # Generate readable report
         report_content = generate_comparison_report(snapshot, changes_detected)
         report_file = os.path.join(artifacts_dir, f"group_report_{timestamp}.md")
         with open(report_file, "w", encoding="utf-8") as f:
             f.write(report_content)
-        print(f"📄 Generated report: {report_file}")
+        print(f" Generated report: {report_file}")
         
         # Save current data as raw JSON for troubleshooting
         raw_data_file = os.path.join(artifacts_dir, f"raw_group_data_{timestamp}.json")
         with open(raw_data_file, "w", encoding="utf-8") as f:
             json.dump(current, f, indent=2)
-        print(f"🔧 Saved raw data: {raw_data_file}")
+        print(f" Saved raw data: {raw_data_file}")
         
         # Step 5: Save current snapshot as previous for next run
         save_current_as_previous(current, artifacts_dir)
@@ -304,15 +304,15 @@ def main():
             print("##vso[task.setvariable variable=GroupChangesDetected;isOutput=true]false")
             print("##vso[task.setvariable variable=GroupsChanged;isOutput=true]0")
         
-        print("✅ Group report generation completed successfully!")
+        print(" Group report generation completed successfully!")
         
         if changes_detected:
-            print(f"⚠️ Changes detected in {groups_with_changes} groups")
+            print(f" Changes detected in {groups_with_changes} groups")
         else:
-            print("ℹ️ No changes detected")
+            print(" No changes detected")
             
     except Exception as e:
-        print(f"❌ Error during execution: {str(e)}")
+        print(f" Error during execution: {str(e)}")
         print("##vso[task.logissue type=error]Group report generation failed")
         raise
 
