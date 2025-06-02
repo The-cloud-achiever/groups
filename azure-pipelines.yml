@@ -53,11 +53,11 @@ stages:
     - script: |
         echo Current directory: %CD%
         dir /s /b
-      displayName: '🕵️ List files in working directory'
+      displayName: ' List files in working directory'
 
     - script: |
         python $(Build.SourcesDirectory)/get_test_with_updates.py
-      displayName: '▶ Run Python Script'  
+      displayName: ' Run Python Script'  
 
     - script: |
         python get_test_with_updates.py
