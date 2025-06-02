@@ -25,11 +25,9 @@ variables:
 
 pool:
   name: 'Default'
-steps:
-- checkout: self
 
 
-  stages:
+stages:
 - stage: 'GenerateGroupReport'
   displayName: 'Generate Azure AD Group Report'
   jobs:
