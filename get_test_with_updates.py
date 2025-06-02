@@ -10,9 +10,9 @@ from azure.storage.blob import BlobServiceClient
 #-------------------------- CONFIGURATION -----------------------
 
 # Entra stuff
-TENANT_ID = "66576a43-4694-4f10-9c82-043ade5de9e8"
-CLIENT_ID= "3442c453-4849-427c-b76a-4fc1aa9b0b5d"
-CLIENT_SECRET = "TPs8Q~ONu~ehezBlW8-H94gGcjUtBfr0Ttb.xdow"
+TENANT_ID = os.environ.get('TENANT_ID')
+CLIENT_ID= os.environ.get('CLIENT_ID')
+CLIENT_SECRET = os.environ.get('CLIENT_SECRET')
 
 # Graph stuff
 GROUPS_ENDPOINT = "https://graph.microsoft.com/v1.0/groups?$"
