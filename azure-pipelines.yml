@@ -6,7 +6,7 @@ trigger:
     - master
   paths:
     include:
-    - group_report_script.py  # Trigger when script changes
+    - get_test_with_updates.py  # Trigger when script changes
     - azure-pipelines.yml     # Trigger when pipeline changes
 
 # Optional: Schedule to run daily at 9 AM UTC
@@ -62,7 +62,7 @@ stages:
 
     # Step 4: Run the group report script
     - script: |
-        python group_report_script.py
+        python get_test_with_updates.py
       displayName: 'Generate Group Report'
       env:
         TENANT_ID: $(TENANT_ID)
@@ -109,41 +109,3 @@ stages:
         artifact: 'group-report-artifacts'
         path: '$(Pipeline.Workspace)/reports'
 
-    # Option 1: Send email using Office 365 Connector (if configured)
-    - task: EmailReport@1
-      displayName: 'Email Group Changes Report'
-      inputs:
-        sendMailConditionConfig: 'always'
-        subject: 'Azure AD Group Changes Detected - $(Build.BuildNumber)'
-        to: 'your-team@company.com'  # Replace with your email
-        body: |
-          Azure AD Group membership changes have been detected.
-          
-          Build: $(Build.BuildNumber)
-          Date: $(Build.Repository.Name)
-          
-          Please check the attached artifacts for detailed changes.
-        attachments: '$(Pipeline.Workspace)/reports/*.md'
-      continueOnError: true
-
-    # Option 2: Post to Teams (if you have Teams webhook configured)
-    - script: |
-        echo "Changes detected in $(GroupsChanged) groups"
-        echo "Posting notification to Teams..."
-        # Add your Teams webhook notification here
-      displayName: 'Post to Teams Channel'
-      condition: and(succeeded(), eq(variables['GroupChangesDetected'], 'true'))
-
-# Optional: Cleanup old artifacts (keep last 10)
-- stage: 'Cleanup'
-  displayName: 'Cleanup Old Artifacts'
-  dependsOn: 'GenerateGroupReport'
-  condition: always()
-  jobs:
-  - job: 'CleanupJob'
-    displayName: 'Cleanup Old Pipeline Runs'
-    steps:
-    - script: |
-        echo "Cleanup can be configured through Azure DevOps retention policies"
-        echo "Go to Project Settings > Pipelines > Retention to configure"
-      displayName: 'Cleanup Information'
