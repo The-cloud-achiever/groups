@@ -20,8 +20,7 @@ schedules:
 
 variables:
 - group: 'AzureAD-Secrets'  # Variable group containing your secrets
-- name: 'pythonVersion'
-  value: '3.9'
+
 
 pool:
   name: 'Default'
