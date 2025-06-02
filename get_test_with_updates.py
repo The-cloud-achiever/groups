@@ -255,7 +255,7 @@ def main():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
     try:
-        print("🚀 Starting Azure AD Group Report Generation")
+        print(" Starting Azure AD Group Report Generation")
         print(f"📁 Artifacts directory: {artifacts_dir}")
         
         # Step 1: Fetch current group members
