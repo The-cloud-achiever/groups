@@ -9,6 +9,7 @@ def get_token():
     tenant_id = os.environ.get('TENANT_ID')
     client_id = os.environ.get('CLIENT_ID')
     client_secret = os.environ.get('CLIENT_SECRET')
+    filter_query = os.environ.get('GROUPS_FILTER')
 
     if not all([tenant_id, client_id, client_secret]):
         raise Exception("Missing environment variables: TENANT_ID, CLIENT_ID, CLIENT_SECRET")
@@ -27,8 +28,10 @@ def get_groups():
     token = get_token()
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
-    filter_query = os.environ.get('GROUPS_FILTER', "startswith(displayName, 'Test')")
-    url = f"https://graph.microsoft.com/v1.0/groups?${filter_query}"
+    if filter_query:
+        url = f"https://graph.microsoft.com/v1.0/groups?$filter={filter_query}"
+    else:
+        url = "https://graph.microsoft.com/v1.0/groups"
 
     response = req.get(url, headers=headers)
     response.raise_for_status()
