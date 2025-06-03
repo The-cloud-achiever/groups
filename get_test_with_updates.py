@@ -105,25 +105,25 @@ def compare_snapshots(current, previous):
 
 # ------------------ Entry ------------------
 def main():
-    print("🚀 Starting group snapshot comparison...")
+    print(" Starting group snapshot comparison...")
     
     current = get_all_group_members()
     previous = load_previous_snapshot()
 
     if not previous:
-        print("📂 No previous snapshot found. This is likely the first run.")
-        print("💾 Saving current snapshot for future comparison.")
+        print("No previous snapshot found. This is likely the first run.")
+        print("Saving current snapshot for future comparison.")
         save_current_snapshot(current)
         return
 
     snapshot, changed = compare_snapshots(current, previous)
     save_current_snapshot(current)
 
-    print("✅ Snapshot comparison complete.")
+    print("Snapshot comparison complete.")
     if changed:
-        print("🔔 Changes detected in group membership!")
+        print("Changes detected in group membership!")
     else:
-        print("🟢 No changes detected.")
+        print("No changes detected.")
 
     # Optional: save comparison result for review
     artifacts_dir = os.environ.get('BUILD_ARTIFACTSTAGINGDIRECTORY', './pipeline-artifacts')
