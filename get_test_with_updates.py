@@ -28,7 +28,7 @@ def get_groups():
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
     filter_query = os.environ.get('GROUPS_FILTER', "startswith(displayName, 'Test')")
-    url = f"https://graph.microsoft.com/v1.0/groups?$filter={filter_query}"
+    url = f"https://graph.microsoft.com/v1.0/groups?${filter_query}"
 
     response = req.get(url, headers=headers)
     response.raise_for_status()
