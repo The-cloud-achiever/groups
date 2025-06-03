@@ -29,7 +29,7 @@ def get_groups():
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
     if filter_query:
-        url = f"https://graph.microsoft.com/v1.0/groups?$filter={filter_query}"
+        url = f"https://graph.microsoft.com/v1.0/groups?{filter_query}"
     else:
         url = "https://graph.microsoft.com/v1.0/groups"
 
