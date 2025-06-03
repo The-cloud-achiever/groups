@@ -49,21 +49,6 @@ stages:
       continueOnError: true  # Don't fail if no previous artifacts exist
 
     # Step 4: Run the group report script
-    - script: |
-        echo Current directory: %CD%
-        dir /s /b
-      displayName: ' List files in working directory'
-
-    - script: |
-        python $(Build.SourcesDirectory)//get_test_with_updates.py
-      displayName: ' Run Python Script'
-      env:
-         TENANT_ID: $(TENANT_ID)
-         CLIENT_ID: $(CLIENT_ID)
-         CLIENT_SECRET: $(CLIENT_SECRET)
-         GROUPS_FILTER: $(GROUPS_FILTER)
-         BUILD_ARTIFACTSTAGINGDIRECTORY: $(Build.ArtifactStagingDirectory)
-         PIPELINE_WORKSPACE: $(Pipeline.Workspace)
 
     - script: |
         python get_test_with_updates.py
