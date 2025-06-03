@@ -29,7 +29,7 @@ def get_groups():
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
     if filter_query:
-        url = f"https://graph.microsoft.com/v1.0/groups?$filter={filter_query}"
+        url = f"https://graph.microsoft.com/v1.0/groups?{filter_query}"
     else:
         url = "https://graph.microsoft.com/v1.0/groups"
 
@@ -76,6 +76,7 @@ def load_previous_snapshot():
     if os.path.exists(path):
         with open(path, 'r', encoding='utf-8') as f:
             return json.load(f)
+    print("No previous snapshot found, treating this as first run.")
     return {}
 
 def save_current_snapshot(data):
