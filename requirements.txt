@@ -2,4 +2,4 @@ requests
 msal
 datetime 
 pdfkit
-Azure
+
