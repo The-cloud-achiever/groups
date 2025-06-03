@@ -1,7 +1,6 @@
 import requests as req
 from datetime import datetime
 from msal import ConfidentialClientApplication
-import base64
 import os
 import json
 import pdfkit

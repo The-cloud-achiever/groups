@@ -1,7 +1,6 @@
 requests
 msal
 datetime 
-base64
 os
 json
 pdfkit
