@@ -1,0 +1,46 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: 'windows-latest'
+
+stages:
+- stage: CreateAndPublish
+  jobs:
+  - job: SaveFile
+    steps:
+    - script: |
+        echo This is the artifact snapshot from build $(Build.BuildId) > snapshot.txt
+      displayName: 'Create snapshot.txt'
+
+    - task: PublishPipelineArtifact@1
+      inputs:
+        targetPath: '$(Build.SourcesDirectory)/snapshot.txt'
+        artifact: 'test-artifact'
+      displayName: 'Publish snapshot.txt as artifact'
+
+- stage: ReadArtifact
+  dependsOn: CreateAndPublish
+  condition: always()
+  jobs:
+  - job: ReadFile
+    steps:
+
+    # Download the artifact from the previous run
+    - task: DownloadPipelineArtifact@2
+      inputs:
+        artifact: 'test-artifact'
+        path: '$(Pipeline.Workspace)'
+        source: 'specific'
+        project: '$(System.TeamProject)'
+        pipeline: 7  # <-- replace with your actual pipeline ID
+        runVersion: 'latest'
+      displayName: 'Download test artifact'
+
+    # Print contents of snapshot.txt
+    - script: |
+        echo Contents of downloaded artifact:
+        type "$(Pipeline.Workspace)\snapshot.txt"
+      displayName: 'Show contents of snapshot.txt'
