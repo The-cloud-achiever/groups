@@ -72,7 +72,7 @@ def get_all_group_members():
 
 # ------------------ Snapshot Handling ------------------
 def load_previous_snapshot():
-    path = os.path.join(os.environ.get('PIPELINE_WORKSPACE', './artifacts'), 'previous_snapshot.json')
+    path = os.path.join(os.environ.get("PIPELINE_WORKSPACE", "./"),"group-report-artifacts","previous_snapshot.json")
     if os.path.exists(path):
         with open(path, 'r', encoding='utf-8') as f:
             return json.load(f)
