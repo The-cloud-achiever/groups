@@ -46,9 +46,8 @@ stages:
         pipeline: 7                     # <- hardcoded pipeline ID
         runId: 86                       # <- the build number that has the artifact
         artifact: 'group-report-artifacts'  # <- must exactly match UI name (case-sensitive)
-        path: '$(Pipeline.Workspace)'
+        path: '$(Build.SourcesDirectory)'
       continueOnError: true
-
 
     - script: |
           echo "Listing files in pipeline workspace:"
@@ -104,5 +103,5 @@ stages:
       inputs:
         source: 'current'
         artifact: 'group-report-artifacts'
-        path: '$(Pipeline.Workspace)/reports'
+        path: '$(Build.SourcesDirectory)'
 
