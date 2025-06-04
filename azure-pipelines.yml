@@ -41,7 +41,7 @@ stages:
     - task: DownloadPipelineArtifact@2
       displayName: 'Download previous snapshot'
       inputs:
-        source: 'current'
+        source: 'previous'
         artifact: 'group-report-artifacts'
         path: '$(Pipeline.Workspace)'
       continueOnError: true  # Don't fail if no previous artifacts exist
