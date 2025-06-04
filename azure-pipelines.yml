@@ -39,15 +39,16 @@ stages:
       displayName: 'Install dependencies'
     # Step 3: Download previous artifacts (if available)
     - task: DownloadPipelineArtifact@2
-      displayName: 'Download previous snapshot'
+      displayName: 'Download previous snapshot from build 86'
       inputs:
         source: 'specific'
         project: '$(System.TeamProject)'
-        pipeline: '$(System.DefinitionId)'
-        runId: 86
-        artifact: 'group-report-artifacts'  # <- must match artifact name exactly
+        pipeline: 7                     # <- hardcoded pipeline ID
+        runId: 86                       # <- the build number that has the artifact
+        artifact: 'group-report-artifacts'  # <- must exactly match UI name (case-sensitive)
         path: '$(Pipeline.Workspace)'
       continueOnError: true
+
 
     - script: |
           echo "Listing files in pipeline workspace:"
