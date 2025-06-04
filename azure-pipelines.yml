@@ -41,10 +41,14 @@ stages:
     - task: DownloadPipelineArtifact@2
       displayName: 'Download previous snapshot'
       inputs:
-        source: 'current'
         artifact: 'group-report-artifacts'
         path: '$(Pipeline.Workspace)'
-      continueOnError: true  # Don't fail if no previous artifacts exist
+        source: 'specific'
+        project: '$(System.TeamProject)'
+        pipeline: '$(System.DefinitionId)'
+        runVersion: 'latest'
+      continueOnError: true
+  # Don't fail if no previous artifacts exist
 
     # Step 4: Run the group report script
 
