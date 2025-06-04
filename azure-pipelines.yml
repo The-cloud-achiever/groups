@@ -39,7 +39,6 @@ stages:
         source: 'specific'
         project: '$(System.TeamProject)'
         pipeline: 9  #  your pipeline ID
-        runVersion: 'latest'
       continueOnError: true
 
 
