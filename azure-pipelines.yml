@@ -38,7 +38,7 @@ stages:
         path: '$(Pipeline.Workspace)'
         source: 'specific'
         project: '$(System.TeamProject)'
-        pipeline: 7  #  your pipeline ID
+        pipeline: 9  #  your pipeline ID
         runVersion: 'latest'
       continueOnError: true
 
