@@ -60,7 +60,7 @@ stages:
     - task: PublishPipelineArtifact@1
       displayName: 'Publish Group Report Artifacts'
       inputs:
-        targetPath: '$(Build.SourcesDirectory)/group-repot-artifacts'
+        targetPath: '$(Build.SourcesDirectory)'
         artifact: 'group-report-artifacts'
         publishLocation: 'pipeline'
       condition: always()  # Always publish artifacts even if script has warnings
