@@ -41,7 +41,6 @@ stages:
     - task: DownloadPipelineArtifact@2
       displayName: 'Download previous snapshot'
       inputs:
-          inputs:
           targetPath: '$(Build.ArtifactStagingDirectory)'
           artifact: 'group-report-artifacts'
           publishLocation: 'pipeline'
