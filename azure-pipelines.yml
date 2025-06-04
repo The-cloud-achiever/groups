@@ -58,9 +58,9 @@ stages:
 
     # Step 4: Publish artifacts
     - task: PublishPipelineArtifact@1
-      displayName: 'Publish Group Report Artifacts'
+      displayName: 'Publish snapshot and comparison result'
       inputs:
-        targetPath: '$(Build.SourcesDirectory)'
+        targetPath: '$(Build.ArtifactStagingDirectory)'  
         artifact: 'group-report-artifacts'
         publishLocation: 'pipeline'
       condition: always()  # Always publish artifacts even if script has warnings
