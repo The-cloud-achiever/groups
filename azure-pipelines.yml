@@ -9,15 +9,6 @@ trigger:
     - get_test_with_updates.py  # Trigger when script changes
     - azure-pipelines.yml     # Trigger when pipeline changes
 
-# Optional: Schedule to run daily at 9 AM UTC
-schedules:
-- cron: "0 9 * * *"
-  displayName: Daily group report
-  branches:
-    include:
-    - main
-  always: true
-
 variables:
 - group: 'AzureAD-Secrets'  # Variable group containing your secrets
 
@@ -33,32 +24,29 @@ stages:
   - job: 'GroupReport'
     displayName: 'Fetch and Compare Group Memberships'
     
+    #Install dependencies
     steps:
     - script: |
-        pip install -r requirements.txt
-      displayName: 'Install dependencies'
-    # Step 3: Download previous artifacts (if available)
+        pip install -r $(Build.SourcesDirectory)/requirements.txt
+      displayName: 'Install Python dependencies'
+
+    # Step 2: Download previous artifacts (if available)
     - task: DownloadPipelineArtifact@2
       displayName: 'Download previous snapshot from build 86'
       inputs:
+        artifact: 'group-report-artifacts'
+        path: '$(Pipeline.Workspace)'
         source: 'specific'
         project: '$(System.TeamProject)'
-        pipeline: 7                     # <- hardcoded pipeline ID
-        runId: 86                       # <- the build number that has the artifact
-        artifact: 'group-report-artifacts'  # <- must exactly match UI name (case-sensitive)
-        path: '$(Build.SourcesDirectory)'
+        pipeline: 7  #  your pipeline ID
+        runVersion: 'latest'
       continueOnError: true
 
-    - script: |
-          echo "Listing files in pipeline workspace:"
-          dir "$(Pipeline.Workspace)" /s /b
-      displayName: 'Debug: List downloaded files'
 
-
-    # Step 4: Run the group report script
+    # Step 3: Run the group report script
 
     - script: |
-        python get_test_with_updates.py
+        python $(Build.SourcesDirectory)/get_test_with_updates.py
       displayName: 'Generate Group Report'
       env:
         TENANT_ID: $(TENANT_ID)
@@ -68,40 +56,13 @@ stages:
         BUILD_ARTIFACTSTAGINGDIRECTORY: $(Build.ArtifactStagingDirectory)
         PIPELINE_WORKSPACE: $(Pipeline.Workspace)
 
-    # Step 5: Publish artifacts
+    # Step 4: Publish artifacts
     - task: PublishPipelineArtifact@1
       displayName: 'Publish Group Report Artifacts'
       inputs:
-        targetPath: '$(Build.ArtifactStagingDirectory)'
+        targetPath: '$(Build.SourcesDirectory)/group-repot-artifacts'
         artifact: 'group-report-artifacts'
         publishLocation: 'pipeline'
       condition: always()  # Always publish artifacts even if script has warnings
 
-    # Step 6: Publish test results (optional - if you want the report in Tests tab)
-    - task: PublishTestResults@2
-      displayName: 'Publish Group Changes as Test Results'
-      inputs:
-        testResultsFormat: 'JUnit'
-        testResultsFiles: '$(Build.ArtifactStagingDirectory)/**/test-results.xml'
-        mergeTestResults: true
-        testRunTitle: 'Azure AD Group Changes'
-      condition: and(succeeded(), eq(variables['GroupChangesDetected'], 'true'))
-      continueOnError: true
-
-- stage: 'NotifyOnChanges'
-  displayName: 'Notify if Changes Detected'
-  dependsOn: 'GenerateGroupReport'
-  condition: and(succeeded(), eq(dependencies.GenerateGroupReport.outputs['GroupReport.GroupChangesDetected'], 'true'))
-  jobs:
-  - job: 'NotificationJob'
-    displayName: 'Send Notifications'
-    steps:
-    
-    # Download the generated reports
-    - task: DownloadPipelineArtifact@2
-      displayName: 'Download Generated Reports'
-      inputs:
-        source: 'current'
-        artifact: 'group-report-artifacts'
-        path: '$(Build.SourcesDirectory)'
 
