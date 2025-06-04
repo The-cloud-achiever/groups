@@ -41,11 +41,19 @@ stages:
     - task: DownloadPipelineArtifact@2
       displayName: 'Download previous snapshot'
       inputs:
-          targetPath: '$(Build.ArtifactStagingDirectory)'
-          artifact: 'group-report-artifacts'
-          publishLocation: 'pipeline'
+        source: 'specific'
+        project: '$(System.TeamProject)'
+        pipeline: '$(System.DefinitionId)'
+        runId: 86
+        artifact: 'group-report-artifacts'  # <- must match artifact name exactly
+        path: '$(Pipeline.Workspace)'
       continueOnError: true
-  # Don't fail if no previous artifacts exist
+
+    - script: |
+          echo "Listing files in pipeline workspace:"
+          dir "$(Pipeline.Workspace)" /s /b
+      displayName: 'Debug: List downloaded files'
+
 
     # Step 4: Run the group report script
 
