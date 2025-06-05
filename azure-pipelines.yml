@@ -40,7 +40,7 @@ stages:
         source: 'specific'
         project: '$(System.TeamProject)'
         pipeline: 9
-        runVersion: 'latest'
+        runID: 108
 
 
     # Step 3: Run the group report script
