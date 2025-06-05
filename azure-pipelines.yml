@@ -32,14 +32,15 @@ stages:
 
     # Step 2: Download previous artifacts (if available)
     - task: DownloadPipelineArtifact@2
-      displayName: 'Download previous snapshot from build 86'
+      displayName: 'Try to download snapshot (non-blocking)'
+      continueOnError: true
       inputs:
         artifact: 'group-report-artifacts'
         path: '$(Pipeline.Workspace)'
         source: 'specific'
         project: '$(System.TeamProject)'
-        pipeline: 9  #  your pipeline ID
-      continueOnError: true
+        pipeline: 9
+        runVersion: 'latest'
 
 
     # Step 3: Run the group report script
