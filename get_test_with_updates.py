@@ -120,14 +120,11 @@ def main():
         save_current_snapshot(current)
         return
 
-    snapshot, changed = compare_snapshots(current, previous)
+    snapshot = compare_snapshots(current, previous)
     save_current_snapshot(current)
 
     print("Snapshot comparison complete.")
-    if changed:
-        print("Changes detected in group membership!")
-    else:
-        print("No changes detected.")
+    
 
     # Optional: save comparison result for review
     artifacts_dir = os.environ.get('BUILD_ARTIFACTSTAGINGDIRECTORY', './pipeline-artifacts')
