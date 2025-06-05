@@ -31,16 +31,16 @@ stages:
       displayName: 'Install Python dependencies'
 
     # Step 2: Download previous artifacts (if available)
-    #- task: DownloadPipelineArtifact@2
-    # displayName: 'Try to download snapshot (non-blocking)'
-    #  continueOnError: true
-    #  inputs:
-     #   artifact: 'group-report-artifacts'
-    #    path: '$(Pipeline.Workspace)'
-    #    source: 'specific'
-     #   project: '$(System.TeamProject)'
-     #   pipeline: 9
-      #  runID: 'latest'
+    - task: DownloadPipelineArtifact@2
+      displayName: 'Try to download snapshot (non-blocking)'
+      continueOnError: true
+      inputs:
+        artifact: 'group-report-artifacts'
+        path: '$(Pipeline.Workspace)'
+        source: 'specific'
+        project: '$(System.TeamProject)'
+        pipeline: 9
+        runID: 'latest'
         
 
 
