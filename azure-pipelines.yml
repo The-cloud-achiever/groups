@@ -36,7 +36,7 @@ stages:
       continueOnError: true
       inputs:
         artifact: 'group-report-artifacts'
-        path: '$(Pipeline.Workspace)'
+        path: '$(Pipeline.Workspace)/group-report-artifacts'  
         source: 'specific'
         project: '$(System.TeamProject)'
         pipeline: 9
