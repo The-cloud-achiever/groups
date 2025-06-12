@@ -106,6 +106,36 @@ def compare_snapshots(current, previous):
         }
 
     return result, changes_detected
+#-------------------Generate Report----------
+def generate_html_report(snapshot, output_path):
+    html = [
+        "<html><head><style>",
+        "body { font-family: Arial, sans-serif; }",
+        "h2 { color: #333; }",
+        ".added { color: green; }",
+        ".removed { color: darkorange; }",
+        ".unchanged { color: black; }",
+        "table { border-collapse: collapse; width: 100%; }",
+        "th, td { padding: 8px 12px; border: 1px solid #ccc; text-align: left; }",
+        "</style></head><body>",
+        "<h1>Azure AD Group Membership Report</h1>"
+    ]
+
+    for group, data in snapshot.items():
+        html.append(f"<h2>{group}</h2>")
+        html.append("<table><tr><th>Change Type</th><th>Members</th></tr>")
+
+        for change_type in ["added", "removed", "unchanged"]:
+            class_name = change_type
+            for member in data.get(change_type, []):
+                html.append(f"<tr><td class='{class_name}'>{change_type.capitalize()}</td><td class='{class_name}'>{member}</td></tr>")
+
+        html.append("</table><br>")
+
+    html.append("</body></html>")
+
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(html))
 
 # ------------------ Entry ------------------
 def main():
@@ -122,6 +152,10 @@ def main():
 
     snapshot = compare_snapshots(current, previous)
     save_current_snapshot(current)
+    html_report_path = os.path.join(artifacts_dir, 'group_membership_report.html')
+    generate_html_report(snapshot[0], html_report_path)
+    print(f"HTML report generated at: {html_report_path}")
+
 
     print("Snapshot comparison complete.")
     
