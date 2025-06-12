@@ -155,9 +155,6 @@ def main():
     html_report_path = os.path.join(artifacts_dir, 'group_membership_report.html')
     generate_html_report(snapshot[0], html_report_path)
     print(f"HTML report generated at: {html_report_path}")
-
-
-    print("Snapshot comparison complete.")
     
 
     # Optional: save comparison result for review
