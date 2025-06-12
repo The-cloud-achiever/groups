@@ -140,7 +140,10 @@ def generate_html_report(snapshot, output_path):
 # ------------------ Entry ------------------
 def main():
     print(" Starting group snapshot comparison...")
-    
+
+    artifacts_dir = os.environ.get('BUILD_ARTIFACTSTAGINGDIRECTORY', './pipeline-artifacts')
+    os.makedirs(artifacts_dir, exist_ok=True)
+
     current = get_all_group_members()
     previous = load_previous_snapshot()
 
@@ -150,17 +153,19 @@ def main():
         save_current_snapshot(current)
         return
 
-    snapshot = compare_snapshots(current, previous)
+    snapshot, changes = compare_snapshots(current, previous)
     save_current_snapshot(current)
-    html_report_path = os.path.join(artifacts_dir, 'group_membership_report.html')
-    generate_html_report(snapshot[0], html_report_path)
-    print(f"HTML report generated at: {html_report_path}")
-    
 
-    # Optional: save comparison result for review
-    artifacts_dir = os.environ.get('BUILD_ARTIFACTSTAGINGDIRECTORY', './pipeline-artifacts')
+    print("Snapshot comparison complete.")
+
+    # Save comparison result
     with open(os.path.join(artifacts_dir, 'comparison_result.json'), 'w', encoding='utf-8') as f:
         json.dump(snapshot, f, indent=2)
+
+    # Generate HTML report
+    html_report_path = os.path.join(artifacts_dir, 'group_membership_report.html')
+    generate_html_report(snapshot, html_report_path)
+    print(f"HTML report saved to: {html_report_path}")
 
 if __name__ == "__main__":
     main()
