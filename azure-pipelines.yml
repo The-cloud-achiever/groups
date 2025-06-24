@@ -14,7 +14,7 @@ variables:
 
 
 pool:
-  name: 'Default'
+  vmImage : 'windows-latest'
 
 
 stages:
@@ -40,7 +40,7 @@ stages:
         source: 'specific'
         project: '$(System.TeamProject)'
         pipeline: 9
-        runID: 'latest'
+        runVersion: 'latest'
         
 
 
