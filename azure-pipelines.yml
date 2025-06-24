@@ -14,7 +14,7 @@ variables:
 
 
 pool:
-  vmImage: :'windows-latest'
+  name: 'Default'
 
 
 stages:
