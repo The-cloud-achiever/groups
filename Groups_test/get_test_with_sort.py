@@ -152,7 +152,8 @@ def generate_html_report(snapshot, output_path):
         append_group_section(changed_sorted)
     else:
         html.append("<p>No changes detected in any group.</p>")
-    sorted_groups = sorted(changed_groups.items())
+
+    sorted_groups = sorted(changed_groups.items() + unchanged_groups.items())
     # Then all groups sorted alphabetically
     html.append("<h1>All Groups</h1>")
     append_group_section(sorted_groups)
