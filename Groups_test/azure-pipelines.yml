@@ -1,0 +1,61 @@
+# azure-pipelines.yml
+trigger: none 
+
+variables:
+- group: 'AzureAD-Secrets'  # Variable group containing your secrets
+
+
+pool:
+  vmImage : 'windows-latest'
+
+
+stages:
+- stage: 'GenerateGroupReport'
+  displayName: 'Generate Azure AD Group Report'
+  jobs:
+  - job: 'GroupReport'
+    displayName: 'Fetch and Compare Group Memberships'
+    
+    #Install dependencies
+    steps:
+    - script: |
+        pip install -r $(Build.SourcesDirectory)/requirements.txt
+      displayName: 'Install Python dependencies'
+
+    # Step 2: Download previous artifacts (if available)
+    - task: DownloadPipelineArtifact@2
+      displayName: 'Try to download snapshot (non-blocking)'
+      continueOnError: true
+      inputs:
+        artifact: 'group-report-artifacts'
+        path: '$(Pipeline.Workspace)/group-report-artifacts'  
+        source: 'specific'
+        project: '$(System.TeamProject)'
+        pipeline: 9
+        runVersion: 'latest'
+        
+
+
+    # Step 3: Run the group report script
+
+    - script: |
+        python $(Build.SourcesDirectory)/get_test_with_updates.py
+      displayName: 'Generate Group Report'
+      env:
+        TENANT_ID: $(TENANT_ID)
+        CLIENT_ID: $(CLIENT_ID)
+        CLIENT_SECRET: $(CLIENT_SECRET)
+        GROUPS_FILTER: $(GROUPS_FILTER)  # Optional filter parameter
+        BUILD_ARTIFACTSTAGINGDIRECTORY: $(Build.ArtifactStagingDirectory)
+        PIPELINE_WORKSPACE: $(Pipeline.Workspace)
+
+    # Step 4: Publish artifacts
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish snapshot and comparison result'
+      inputs:
+        targetPath: '$(Build.ArtifactStagingDirectory)'  
+        artifact: 'group-report-artifacts'
+        publishLocation: 'pipeline'
+      condition: always()  # Always publish artifacts even if script has warnings
+
+
