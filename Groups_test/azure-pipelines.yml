@@ -19,7 +19,7 @@ stages:
     #Install dependencies
     steps:
     - script: |
-        pip install -r $(Build.SourcesDirectory)/requirements.txt
+        pip install -r $(Build.SourcesDirectory)/Groups_test/requirements.txt
       displayName: 'Install Python dependencies'
 
     # Step 2: Download previous artifacts (if available)
@@ -39,7 +39,7 @@ stages:
     # Step 3: Run the group report script
 
     - script: |
-        python $(Build.SourcesDirectory)/get_test_with_sort.py
+        python $(Build.SourcesDirectory)/Groups_test/get_test_with_sort.py
       displayName: 'Generate Group Report'
       env:
         TENANT_ID: $(TENANT_ID)
