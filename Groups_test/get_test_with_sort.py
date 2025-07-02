@@ -131,8 +131,7 @@ def generate_html_report(snapshot, output_path):
             unchanged_groups[group] = data
 
     # Sort group names alphabetically
-    changed_sorted = sorted(changed_groups.items())
-    unchanged_sorted = sorted(unchanged_groups.items())
+    
     
     def append_group_section(groups):
         for group, data in groups:
@@ -144,6 +143,8 @@ def generate_html_report(snapshot, output_path):
                     html.append(f"<tr><td class='{class_name}'>{change_type.capitalize()}</td><td class='{class_name}'>{member}</td></tr>")
             html.append("</table><br>")
 
+    changed_sorted = sorted(changed_groups.items())
+    unchanged_sorted = sorted(unchanged_groups.items())
     # Display groups with changes first
     html.append("<h1>Groups With Changes</h1>")
     if changed_sorted:
