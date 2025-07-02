@@ -6,7 +6,7 @@ variables:
 
 
 pool:
-  name: 'Default'
+  vmImage : 'windows-latest'
 
 
 stages:
