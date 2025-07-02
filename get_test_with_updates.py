@@ -106,11 +106,44 @@ def compare_snapshots(current, previous):
         }
 
     return result, changes_detected
+#-------------------Generate Report----------
+def generate_html_report(snapshot, output_path):
+    html = [
+        "<html><head><style>",
+        "body { font-family: Arial, sans-serif; }",
+        "h2 { color: #333; }",
+        ".added { color: green; }",
+        ".removed { color: darkorange; }",
+        ".unchanged { color: black; }",
+        "table { border-collapse: collapse; width: 100%; }",
+        "th, td { padding: 8px 12px; border: 1px solid #ccc; text-align: left; }",
+        "</style></head><body>",
+        "<h1>Azure AD Group Membership Report</h1>"
+    ]
+
+    for group, data in snapshot.items():
+        html.append(f"<h2>{group}</h2>")
+        html.append("<table><tr><th>Change Type</th><th>Members</th></tr>")
+
+        for change_type in ["added", "removed", "unchanged"]:
+            class_name = change_type
+            for member in data.get(change_type, []):
+                html.append(f"<tr><td class='{class_name}'>{change_type.capitalize()}</td><td class='{class_name}'>{member}</td></tr>")
+
+        html.append("</table><br>")
+
+    html.append("</body></html>")
+
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(html))
 
 # ------------------ Entry ------------------
 def main():
     print(" Starting group snapshot comparison...")
-    
+
+    artifacts_dir = os.environ.get('BUILD_ARTIFACTSTAGINGDIRECTORY', './pipeline-artifacts')
+    os.makedirs(artifacts_dir, exist_ok=True)
+
     current = get_all_group_members()
     previous = load_previous_snapshot()
 
@@ -120,12 +153,12 @@ def main():
         save_current_snapshot(current)
         return
 
-    snapshot = compare_snapshots(current, previous)
+    snapshot, changes = compare_snapshots(current, previous)
     save_current_snapshot(current)
 
     print("Snapshot comparison complete.")
-    
 
+<<<<<<< HEAD
     # Optional: save comparison result for review
     artifacts_dir = os.environ.get('BUILD_ARTIFACTSTAGINGDIRECTORY', './pipeline-artifacts')
 
@@ -146,8 +179,16 @@ def main():
     # Now, when printing or saving, use this order
     ordered_result = {g: comparison_result[g] for g in final_group_order}
 
+=======
+    # Save comparison result
+>>>>>>> 01cc390b0ef2c113a9f33f4aa51640928fa71cf9
     with open(os.path.join(artifacts_dir, 'comparison_result.json'), 'w', encoding='utf-8') as f:
         json.dump(ordered_result, f, indent=2)
+
+    # Generate HTML report
+    html_report_path = os.path.join(artifacts_dir, 'group_membership_report.html')
+    generate_html_report(snapshot, html_report_path)
+    print(f"HTML report saved to: {html_report_path}")
 
 if __name__ == "__main__":
     main()

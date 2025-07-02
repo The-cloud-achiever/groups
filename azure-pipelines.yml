@@ -6,7 +6,7 @@ variables:
 
 
 pool:
-  name: 'windows-latest'
+  name: 'Default'
 
 
 stages:
@@ -28,11 +28,11 @@ stages:
       continueOnError: true
       inputs:
         artifact: 'group-report-artifacts'
-        path: '$(Pipeline.Workspace)'
+        path: '$(Pipeline.Workspace)/group-report-artifacts'  
         source: 'specific'
         project: '$(System.TeamProject)'
         pipeline: 9
-        runID: 'latest'
+        runVersion: 'latest'
         
 
 
