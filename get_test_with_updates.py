@@ -128,8 +128,26 @@ def main():
 
     # Optional: save comparison result for review
     artifacts_dir = os.environ.get('BUILD_ARTIFACTSTAGINGDIRECTORY', './pipeline-artifacts')
+
+    # snapshot is a tuple: (comparison_result, changes_detected)
+    comparison_result, _ = snapshot
+
+    # Separate groups with changes and all groups
+    groups_with_changes = [g for g, v in comparison_result.items() if v['added'] or v['removed']]
+    all_groups = list(comparison_result.keys())
+
+    # Sort both lists alphabetically
+    groups_with_changes_sorted = sorted(groups_with_changes)
+    all_groups_sorted = sorted(all_groups)
+
+    # Combine: changes first, then the rest (excluding duplicates)
+    final_group_order = groups_with_changes_sorted + [g for g in all_groups_sorted if g not in groups_with_changes_sorted]
+
+    # Now, when printing or saving, use this order
+    ordered_result = {g: comparison_result[g] for g in final_group_order}
+
     with open(os.path.join(artifacts_dir, 'comparison_result.json'), 'w', encoding='utf-8') as f:
-        json.dump(snapshot, f, indent=2)
+        json.dump(ordered_result, f, indent=2)
 
 if __name__ == "__main__":
     main()

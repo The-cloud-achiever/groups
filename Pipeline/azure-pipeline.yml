@@ -1,0 +1,155 @@
+trigger:
+  branches:
+    include:
+    - main
+  paths:
+    include:
+    - src/*
+    - azure-pipelines.yml
+
+# Schedule to run daily at 8 AM UTC
+schedules:
+- cron: "0 8 * * *"
+  displayName: Daily membership check
+  branches:
+    include:
+    - main
+  always: true
+
+# Can also be triggered manually
+pr: none
+
+pool:
+  name: 'Default'
+
+variables:
+  # Define these as pipeline variables or variable groups
+  - group: 'AzureAD-Secrets'  # Variable group containing secrets
+  - name: pythonVersion
+    value: '3.11'
+  - name: artifactName
+    value: 'membership-reports'
+
+stages:
+- stage: CheckMembership
+  displayName: 'Check Group Membership'
+  jobs:
+  - job: CompareMembers
+    displayName: 'Compare Group Members'
+    
+    steps:
+    - checkout: self
+      persistCredentials: true
+    
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: '$(pythonVersion)'
+      displayName: 'Use Python $(pythonVersion)'
+    
+    - script: |
+        python -m pip install --upgrade pip
+        pip install azure-identity msal requests reportlab azure-storage-blob
+      displayName: 'Install dependencies'
+    
+    # Download previous member data from artifacts (if exists)
+    - task: DownloadPipelineArtifact@2
+      inputs:
+        buildType: 'specific'
+        project: '$(System.TeamProject)'
+        definition: '$(System.DefinitionId)'
+        buildVersionToDownload: 'latest'
+        artifactName: 'member-data'
+        targetPath: '$(Pipeline.Workspace)/previous-data'
+      displayName: 'Download previous member data'
+      continueOnError: true
+    
+    # Copy previous data if it exists
+    - script: |
+        if [ -f "$(Pipeline.Workspace)/previous-data/previous_members.json" ]; then
+          cp "$(Pipeline.Workspace)/previous-data/previous_members.json" ./previous_members.json
+          echo "Previous member data found and copied"
+        else
+          echo "No previous member data found - first run"
+        fi
+      displayName: 'Setup previous member data'
+    
+    # Run the membership comparison
+    - script: |
+        python src/pipeline.py
+      env:
+        TENANT_ID: $(TENANT_ID)
+        CLIENT_ID: $(CLIENT_ID)
+        CLIENT_SECRET: $(CLIENT_SECRET)
+      displayName: 'Run membership comparison'
+    
+    # Publish the generated PDF report
+    - task: PublishPipelineArtifact@1
+      inputs:
+        targetPath: '$(System.DefaultWorkingDirectory)/reports'
+        artifact: '$(artifactName)'
+        publishLocation: 'pipeline'
+      displayName: 'Publish PDF report'
+      condition: always()
+    
+    # Publish current member data for next run
+    - task: PublishPipelineArtifact@1
+      inputs:
+        targetPath: '$(System.DefaultWorkingDirectory)/previous_members.json'
+        artifact: 'member-data'
+        publishLocation: 'pipeline'
+      displayName: 'Publish current member data'
+      condition: always()
+    
+    # Optional: Send notification if changes detected
+    - task: PowerShell@2
+      inputs:
+        targetType: 'inline'
+        script: |
+          $reportPath = "$(System.DefaultWorkingDirectory)/reports"
+          $reportFile = Get-ChildItem -Path $reportPath -Filter "*.pdf" | Select-Object -First 1
+          
+          if ($reportFile) {
+            Write-Host "##vso[task.setvariable variable=ReportGenerated;isOutput=true]true"
+            Write-Host "##vso[task.setvariable variable=ReportPath;isOutput=true]$($reportFile.FullName)"
+            Write-Host "Report generated: $($reportFile.Name)"
+          } else {
+            Write-Host "##vso[task.setvariable variable=ReportGenerated;isOutput=true]false"
+          }
+      displayName: 'Check if report generated'
+      name: 'CheckReport'
+
+- stage: Notify
+  displayName: 'Send Notifications'
+  dependsOn: CheckMembership
+  condition: and(succeeded(), eq(dependencies.CheckMembership.outputs['CompareMembers.CheckReport.ReportGenerated'], 'true'))
+  jobs:
+  - job: SendNotification
+    displayName: 'Send Email Notification'
+    
+    steps:
+    - task: DownloadPipelineArtifact@2
+      inputs:
+        buildType: 'current'
+        artifactName: '$(artifactName)'
+        targetPath: '$(Pipeline.Workspace)/reports'
+      displayName: 'Download report artifacts'
+    
+    # Send email notification (requires Azure DevOps email extension or custom solution)
+    - task: PowerShell@2
+      inputs:
+        targetType: 'inline'
+        script: |
+          Write-Host "Group membership changes detected!"
+          Write-Host "Report available in pipeline artifacts"
+          Write-Host "##vso[task.logissue type=warning]Group membership changes detected - check pipeline artifacts for detailed report"
+      displayName: 'Log notification'
+    
+    # Optional: Upload to Azure Storage or SharePoint
+    # - task: AzureFileCopy@4
+    #   inputs:
+    #     SourcePath: '$(Pipeline.Workspace)/reports'
+    #     azureSubscription: 'your-service-connection'
+    #     Destination: 'AzureBlob'
+    #     storage: 'yourstorageaccount'
+    #     ContainerName: 'reports'
+    #   displayName: 'Upload to Azure Storage'

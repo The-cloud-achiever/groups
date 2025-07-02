@@ -1,20 +1,12 @@
 # azure-pipelines.yml
-trigger:
-  branches:
-    include:
-    - main
-    - master
-  paths:
-    include:
-    - get_test_with_updates.py  # Trigger when script changes
-    - azure-pipelines.yml     # Trigger when pipeline changes
+trigger: none 
 
 variables:
 - group: 'AzureAD-Secrets'  # Variable group containing your secrets
 
 
 pool:
-  name: 'Default'
+  name: 'windows-latest'
 
 
 stages:
