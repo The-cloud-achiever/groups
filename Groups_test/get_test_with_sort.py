@@ -134,15 +134,7 @@ def generate_html_report(snapshot, output_path):
     changed_sorted = sorted(changed_groups.items())
     unchanged_sorted = sorted(unchanged_groups.items())
 
-    def append_group_section(groups):
-        for group, data in groups:
-            html.append(f"<h2>{group}</h2>")
-            html.append("<table><tr><th>Change Type</th><th>Members</th></tr>")
-            for change_type in ["added", "removed", "unchanged"]:
-                class_name = change_type
-                for member in data.get(change_type, []):
-                    html.append(f"<tr><td class='{class_name}'>{change_type.capitalize()}</td><td class='{class_name}'>{member}</td></tr>")
-            html.append("</table><br>")
+    
 
     # Display groups with changes first
     html.append("<h1>Groups With Changes</h1>")
@@ -152,14 +144,23 @@ def generate_html_report(snapshot, output_path):
         html.append("<p>No changes detected in any group.</p>")
 
     # Then all groups sorted alphabetically
-    html.append("<h1>All Groups (Alphabetical)</h1>")
+    html.append("<h1>All Groups</h1>")
     append_group_section(changed_sorted + unchanged_sorted)
 
     html.append("</body></html>")
 
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(html))
-
+        
+    def append_group_section(groups):
+        for group, data in groups:
+            html.append(f"<h2>{group}</h2>")
+            html.append("<table><tr><th>Change Type</th><th>Members</th></tr>")
+            for change_type in ["added", "removed", "unchanged"]:
+                class_name = change_type
+                for member in data.get(change_type, []):
+                    html.append(f"<tr><td class='{class_name}'>{change_type.capitalize()}</td><td class='{class_name}'>{member}</td></tr>")
+            html.append("</table><br>")
 
 # ------------------ Entry ------------------
 def main():
