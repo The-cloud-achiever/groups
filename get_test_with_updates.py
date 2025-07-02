@@ -153,17 +153,10 @@ def main():
         save_current_snapshot(current)
         return
 
-    snapshot, changes = compare_snapshots(current, previous)
+    comparison_result, changes = compare_snapshots(current, previous)
     save_current_snapshot(current)
 
     print("Snapshot comparison complete.")
-
-
-    # Optional: save comparison result for review
-    artifacts_dir = os.environ.get('BUILD_ARTIFACTSTAGINGDIRECTORY', './pipeline-artifacts')
-
-    # snapshot is a tuple: (comparison_result, changes_detected)
-    comparison_result, _ = snapshot
 
     # Separate groups with changes and all groups
     groups_with_changes = [g for g, v in comparison_result.items() if v['added'] or v['removed']]
@@ -179,13 +172,12 @@ def main():
     # Now, when printing or saving, use this order
     ordered_result = {g: comparison_result[g] for g in final_group_order}
 
-
     with open(os.path.join(artifacts_dir, 'comparison_result.json'), 'w', encoding='utf-8') as f:
         json.dump(ordered_result, f, indent=2)
 
     # Generate HTML report
     html_report_path = os.path.join(artifacts_dir, 'group_membership_report.html')
-    generate_html_report(snapshot, html_report_path)
+    generate_html_report(ordered_result, html_report_path)
     print(f"HTML report saved to: {html_report_path}")
 
 if __name__ == "__main__":
