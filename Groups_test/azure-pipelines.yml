@@ -39,7 +39,7 @@ stages:
     # Step 3: Run the group report script
 
     - script: |
-        python $(Build.SourcesDirectory)/get_test_with_updates.py
+        python $(Build.SourcesDirectory)/get_test_with_sort.py
       displayName: 'Generate Group Report'
       env:
         TENANT_ID: $(TENANT_ID)
