@@ -154,7 +154,8 @@ def generate_html_report(snapshot, output_path):
     # Then all groups sorted alphabetically
     html.append("<h1>All Groups</h1>")
     all_sorted_groups = changed_sorted + unchanged_sorted
-    append_group_section(all_sorted_groups)
+
+    append_group_section(sorted(all_sorted_groups))
 
     html.append("</body></html>")
 
