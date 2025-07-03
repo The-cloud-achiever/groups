@@ -130,8 +130,6 @@ def generate_html_report(snapshot, output_path):
         else:
             unchanged_groups[group] = data
 
-   
-    
     def append_group_section(groups):
         for group, data in groups:
             html.append(f"<h2>{group}</h2>")
@@ -142,7 +140,7 @@ def generate_html_report(snapshot, output_path):
                     html.append(f"<tr><td class='{class_name}'>{change_type.capitalize()}</td><td class='{class_name}'>{member}</td></tr>")
             html.append("</table><br>")
 
-     # Sort group names alphabetically
+    # Sort group names alphabetically
     changed_sorted = sorted(changed_groups.items())
     unchanged_sorted = sorted(unchanged_groups.items())
 
@@ -153,10 +151,9 @@ def generate_html_report(snapshot, output_path):
     else:
         html.append("<p>No changes detected in any group.</p>")
 
-    all_sorted_groups = changed_sorted + unchanged_sorted
-
     # Then all groups sorted alphabetically
     html.append("<h1>All Groups</h1>")
+    all_sorted_groups = changed_sorted + unchanged_sorted
     append_group_section(all_sorted_groups)
 
     html.append("</body></html>")
@@ -164,7 +161,6 @@ def generate_html_report(snapshot, output_path):
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(html))
 
-    
 
 # ------------------ Entry ------------------
 def main():
