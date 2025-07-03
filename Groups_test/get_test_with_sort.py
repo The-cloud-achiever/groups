@@ -122,36 +122,36 @@ def generate_html_report(snapshot, output_path):
     ]
 
     # Separate changed and unchanged groups
-    changed_groups = {}
-    unchanged_groups = {}
-    for group, data in snapshot.items():
-        if data["added"] or data["removed"]:
-            changed_groups[group] = data
-        else:
-            unchanged_groups[group] = data
+    # changed_groups = {}
+    # unchanged_groups = {}
+    # for group, data in snapshot.items():
+    #     if data["added"] or data["removed"]:
+    #         changed_groups[group] = data
+    #     else:
+    #         unchanged_groups[group] = data
 
-    def append_group_section(groups):
-        for group, data in groups:
-            html.append(f"<h2>{group}</h2>")
-            html.append("<table><tr><th>Change Type</th><th>Members</th></tr>")
-            for change_type in ["added", "removed", "unchanged"]:
-                class_name = change_type
-                for member in data.get(change_type, []):
-                    html.append(f"<tr><td class='{class_name}'>{change_type.capitalize()}</td><td class='{class_name}'>{member}</td></tr>")
-            html.append("</table><br>")
+    # def append_group_section(groups):
+    #     for group, data in groups:
+    #         html.append(f"<h2>{group}</h2>")
+    #         html.append("<table><tr><th>Change Type</th><th>Members</th></tr>")
+    #         for change_type in ["added", "removed", "unchanged"]:
+    #             class_name = change_type
+    #             for member in data.get(change_type, []):
+    #                 html.append(f"<tr><td class='{class_name}'>{change_type.capitalize()}</td><td class='{class_name}'>{member}</td></tr>")
+    #         html.append("</table><br>")
 
-    # Sort group names alphabetically
-    changed_sorted = sorted(changed_groups.items())
-    unchanged_sorted = sorted(unchanged_groups.items())
+    # # Sort group names alphabetically
+    # changed_sorted = sorted(changed_groups.items())
+    # unchanged_sorted = sorted(unchanged_groups.items())
 
-    # Display groups with changes first
-    html.append("<h1>Groups With Changes</h1>")
-    if changed_sorted:
-        append_group_section(changed_sorted)
-    else:
-        html.append("<p>No changes detected in any group.</p>")
+    # # Display groups with changes first
+    # html.append("<h1>Groups With Changes</h1>")
+    # if changed_sorted:
+    #     append_group_section(changed_sorted)
+    # else:
+    #     html.append("<p>No changes detected in any group.</p>")
 
-    # Then all groups sorted alphabetically
+    # # Then all groups sorted alphabetically
     html.append("<h1>All Groups</h1>")
     all_sorted_groups = changed_sorted + unchanged_sorted
     append_group_section(all_sorted_groups)

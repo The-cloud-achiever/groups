@@ -31,7 +31,7 @@ stages:
         path: '$(Pipeline.Workspace)/group-report-artifacts'  
         source: 'specific'
         project: '$(System.TeamProject)'
-        pipeline: 9
+        pipeline: 14
         runVersion: 'latest'
         
 
