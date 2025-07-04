@@ -35,7 +35,7 @@ stages:
         path: '$(Pipeline.Workspace)/group-report-artifacts'
         source: 'specific'
         project: '$(System.TeamProject)'
-        pipeline: 14
+        pipeline: 15
         runVersion: 'latest'
 
     # Step 4: Run the main script to generate the report
