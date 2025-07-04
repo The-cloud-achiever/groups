@@ -20,7 +20,7 @@ stages:
       displayName: 'Install Python packages'
 
     # Step 2: Install wkhtmltopdf using Chocolatey
-     - powershell: |
+    - powershell: |
         Set-ExecutionPolicy Bypass -Scope Process -Force
         choco install wkhtmltopdf -y
         wkhtmltopdf --version
