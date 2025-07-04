@@ -1,5 +1,6 @@
 import os
 import json
+import pdfkit
 from datetime import datetime
 import requests as req
 from msal import ConfidentialClientApplication
@@ -162,6 +163,12 @@ def generate_html_report(snapshot, output_path):
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(html))
 
+#-------------------Generate PDF Report----------
+def generate_pdf_report(html_path, pdf_path):
+    pdfkit.from_file(html_path, pdf_path)
+    print(f"PDF report saved to: {pdf_path}")
+   
+
 
 # ------------------ Entry ------------------
 def main():
@@ -192,6 +199,10 @@ def main():
     html_report_path = os.path.join(artifacts_dir, 'group_membership_report.html')
     generate_html_report(snapshot, html_report_path)
     print(f"HTML report saved to: {html_report_path}")
+
+    # Generate PDF report
+    pdf_report_path = os.path.join(artifacts_dir, 'group_membership_report.pdf')
+    generate_pdf_report(html_report_path, pdf_report_path)
 
 if __name__ == "__main__":
     main()
