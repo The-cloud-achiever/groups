@@ -27,16 +27,16 @@ stages:
       displayName: 'Install wkhtmltopdf using choco'
 
      # Step 3: Try to download previous snapshot (if any)
-    # - task: DownloadPipelineArtifact@2
-    #   displayName: 'Download previous snapshot (non-blocking)'
-    #   continueOnError: true
-    #   inputs:
-    #     artifact: 'group-report-artifacts'
-    #     path: '$(Pipeline.Workspace)/group-report-artifacts'
-    #     source: 'specific'
-    #     project: '$(System.TeamProject)'
-    #     pipeline: 7
-    #     runVersion: 'latest'
+    - task: DownloadPipelineArtifact@2
+      displayName: 'Download previous snapshot (non-blocking)'
+      continueOnError: true
+      inputs:
+        artifact: 'group-report-artifacts'
+        path: '$(Pipeline.Workspace)/group-report-artifacts'
+        source: 'specific'
+        project: '$(System.TeamProject)'
+        pipeline: 7
+        runVersion: 'latest'
 
     # Step 4: Run the main script to generate the report
     - script: |
