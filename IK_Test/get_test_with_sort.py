@@ -89,26 +89,52 @@ def save_current_snapshot(data):
 # ------------------ Comparison Logic ------------------
 def compare_snapshots(current, previous):
     result = {}
+    added_groups = []
+    deleted_groups = []
     all_keys = set(current.keys()).union(previous.keys())
     changes_detected = False
 
     for group in all_keys:
-        cur = set(current.get(group, []))
-        prev = set(previous.get(group, []))
-        added = list(cur - prev)
-        removed = list(prev - cur)
+        cur_members = set(current.get(group, []))
+        prev_members = set(previous.get(group, []))
 
-        if added or removed:
+        # Check if group is added
+        if group not in previous:
+            added_groups.append(group)
+            result[group] = {
+                'added': sorted(current[group]),
+                'removed': [],
+                'unchanged': []
+            }
             changes_detected = True
-        result[group] = {
-            'added': sorted(added),
-            'removed': sorted(removed),
-            'unchanged': sorted(cur & prev)
-        }
 
-    return result, changes_detected
+        # Check if group is deleted
+        elif group not in current:
+            deleted_groups.append(group)
+            result[group] = {   
+                'added': [],
+                'removed': sorted(previous[group]),
+                'unchanged': []
+            }
+            changes_detected = True
+
+        # Check if group has changes
+        else:
+            added = list(cur_members - prev_members)
+            removed = list(prev_members - cur_members)
+            unchanged = list(cur_members & prev_members)
+
+            if added or removed:
+                changes_detected = True
+            result[group] = {
+                'added': sorted(added),
+                'removed': sorted(removed),
+                'unchanged': sorted(cur_members & prev_members)
+            }
+    return result, changes_detected, added_groups, deleted_groups
+
 #-------------------Generate Report----------
-def generate_html_report(snapshot, output_path):
+def generate_html_report(snapshot, output_path, added_groups, deleted_groups):
     html = [
         "<html><head><style>",
         "body { font-family: Arial, sans-serif; }",
@@ -121,6 +147,19 @@ def generate_html_report(snapshot, output_path):
         "</style></head><body>",
         "<h1>Azure AD Group Membership Report</h1>"
     ]
+
+    # Add added and deleted groups
+    if added_groups:
+        html.append("<h2>Added Groups</h2>")
+        for group in added_groups:
+            html.append(f"<p>{group}</p>")
+        html.append("<br>")
+
+    if deleted_groups:
+        html.append("<h2>Deleted Groups</h2>")
+        for group in deleted_groups:
+            html.append(f"<p>{group}</p>")
+        html.append("<br>")
 
     # Separate changed and unchanged groups
     changed_groups = {}
@@ -186,7 +225,7 @@ def main():
         save_current_snapshot(current)
         return
 
-    snapshot, changes = compare_snapshots(current, previous)
+    snapshot, changes_detected, added_groups, deleted_groups = compare_snapshots(current, previous)
     save_current_snapshot(current)
 
     print("Snapshot comparison complete.")
@@ -197,7 +236,7 @@ def main():
 
     # Generate HTML report
     html_report_path = os.path.join(artifacts_dir, 'group_membership_report.html')
-    generate_html_report(snapshot, html_report_path)
+    generate_html_report(snapshot, html_report_path, added_groups, deleted_groups)
     print(f"HTML report saved to: {html_report_path}")
 
     # Generate PDF report
