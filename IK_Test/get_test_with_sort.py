@@ -34,14 +34,26 @@ def get_groups():
     else:
         url = "https://graph.microsoft.com/v1.0/groups"
 
-    response = req.get(url, headers=headers)
-    response.raise_for_status()
-    return response.json().get("value", [])
+    all_groups = []
+
+    #follow nextLink to get all groups
+    while url:
+        response = req.get(url, headers=headers)
+        response.raise_for_status()
+        all_groups.extend(response.json().get("value", []))
+        url = response.json().get("@odata.nextLink")
+
+    
+
+    return all_groups
+
+
 
 def get_all_group_members():
     token = get_token()
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     groups = get_groups()
+    print(f"Total groups: {len(groups)}") #to check if all groups are fetched
     group_members = {}
     batch_requests = []
     batch_size = 20
