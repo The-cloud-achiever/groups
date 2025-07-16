@@ -1,6 +1,7 @@
 import os
 import json
 import pdfkit
+import base64
 from datetime import datetime
 import requests as req
 from msal import ConfidentialClientApplication
@@ -219,7 +220,63 @@ def generate_pdf_report(html_path, pdf_path):
     pdfkit.from_file(html_path, pdf_path)
     print(f"PDF report saved to: {pdf_path}")
    
+#------------------Email report----------
+def send_email(html_path, pdf_path):
+    SENDER_EMAIL = os.environ.get('SENDER_EMAIL')
+    RECIPIENT_EMAIL = os.environ.get('RECIPIENT_EMAIL')
 
+    if not RECIPIENT_EMAIL:
+        raise ValueError("RECIPIENT_EMAIL environment variable is not set.")
+
+    token = get_token()
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+    # Use /users/{sender}/sendMail if SENDER_EMAIL is set, otherwise /me/sendMail
+    if SENDER_EMAIL:
+        url = f"https://graph.microsoft.com/v1.0/users/{SENDER_EMAIL}/sendMail"
+    else:
+        url = "https://graph.microsoft.com/v1.0/me/sendMail"
+
+    with open(html_path, 'r', encoding='utf-8') as f:
+        html_content = f.read()
+    with open(pdf_path, 'rb') as f:
+        pdf_content = f.read()
+
+    # Add your custom message at the top of the email body
+    custom_message = """
+    <p>Dear recipient,</p>
+    <p>Please find the Azure AD Group Membership report below. The PDF version is attached for your convenience.</p>
+    <p>Best regards,<br>IT Team</p>
+    <hr>
+    """
+    full_html_body = custom_message + html_content
+
+    email_payload = {
+        "message": {
+            "subject": "Report: All AD Group members",
+            "body": {
+                "contentType": "HTML",
+                "content": full_html_body
+            },
+            "toRecipients": [
+                {"emailAddress": {"address": RECIPIENT_EMAIL}}
+            ],
+            "attachments": [{
+                "@odata.type": "#microsoft.graph.fileAttachment",
+                "name": "group_membership_report.pdf",
+                "contentBytes": base64.b64encode(pdf_content).decode('utf-8')
+            }]
+        },
+        "saveToSentItems": "true"
+    }
+
+    response = req.post(url, headers=headers, json=email_payload)
+    try:
+        response.raise_for_status()
+        print("Email sent successfully")
+    except Exception as e:
+        print(f"Failed to send email: {response.text}")
+        raise
 
 # ------------------ Entry ------------------
 def main():
@@ -254,6 +311,9 @@ def main():
     # Generate PDF report
     pdf_report_path = os.path.join(artifacts_dir, 'group_membership_report.pdf')
     generate_pdf_report(html_report_path, pdf_report_path)
+    
+    # Send email
+    send_email(html_report_path, pdf_report_path)
 
 if __name__ == "__main__":
     main()
