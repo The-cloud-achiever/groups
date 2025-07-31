@@ -23,8 +23,8 @@ steps:
         -appId "$(APP_ID)" `
         -org "$(ORG_DOMAIN)" `
         -thumbprint $thumbprint `
-        -historyFile "$(DL_HISTORY_FILE)" `
-        -reportFile "$(DL_REPORT_FILE)"
+        # -historyFile "$(DL_HISTORY_FILE)" `
+        # -reportFile "$(DL_REPORT_FILE)"
   displayName: Run DL Tracking Script
 
 - publish: '$(DL_REPORT_FILE)'
