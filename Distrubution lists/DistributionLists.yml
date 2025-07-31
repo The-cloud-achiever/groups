@@ -19,7 +19,7 @@ steps:
 
     Write-Host "Using cert thumbprint: $thumbprint"
 
-    .\scripts\TrackDLChanges.ps1 `
+    .DLChanges.ps1 `
         -appId "$(APP_ID)" `
         -org "$(ORG_DOMAIN)" `
         -thumbprint $thumbprint `
