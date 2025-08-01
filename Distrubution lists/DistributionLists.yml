@@ -34,7 +34,7 @@ steps:
       #   '{}' | Out-File $prevFile
       # }
 
-      & "$(Build.SourcesDirectory)/Groups/DLchanges.ps1" `
+      & "$(Build.SourcesDirectory)/Groups/Distribution lists/DLchanges.ps1" `
         -appId "$(APP_ID)" `
         -orgName "$(ORG_DOMAIN)" `
         -thumbprint $thumbprint `
