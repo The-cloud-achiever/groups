@@ -19,12 +19,19 @@ steps:
 
     Write-Host "Using cert thumbprint: $thumbprint"
 
-    .DLChanges.ps1 `
+- powershell: |
+    $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
+    $cert.Import("$(fetchCert.secureFilePath)", "$(PFX_PASSWORD)", "PersistKeySet")
+    $thumbprint = $cert.Thumbprint
+
+    Write-Host "Using cert thumbprint: $thumbprint"
+
+    & "$(Build.SourcesDirectory)/Groups/DLchanges.ps1" `
         -appId "$(APP_ID)" `
-        -org "$(ORG_DOMAIN)" `
+        -orgName "$(ORG_DOMAIN)" `
         -thumbprint $thumbprint `
-        # -historyFile "$(DL_HISTORY_FILE)" `
-        # -reportFile "$(DL_REPORT_FILE)"
+        -previous "$(DL_HISTORY_FILE)" `
+        -report "$(DL_REPORT_FILE)"
   displayName: Run DL Tracking Script
 
 - publish: '$(DL_REPORT_FILE)'
