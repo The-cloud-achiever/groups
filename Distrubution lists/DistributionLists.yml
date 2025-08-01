@@ -4,36 +4,52 @@ pool:
   vmImage: 'windows-latest'
 
 variables:
-- group: DL-Secrets
+- group: DL-Secrets  # your variable group
 
 steps:
+- task: DownloadPipelineArtifact@2
+  displayName: Download Previous DL State
+  inputs:
+    buildType: 'current'
+    artifactName: 'DLReport'
+    targetPath: 'prev'
+
 - task: DownloadSecureFile@1
   name: fetchCert
   inputs:
     secureFile: 'DLTrackingCert.pfx'
 
-- powershell: |
-    $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
-    $cert.Import("$(fetchCert.secureFilePath)", "$(PFX_PASSWORD)", "PersistKeySet")
-    $thumbprint = $cert.Thumbprint
+- task: PowerShell@2
+  displayName: Run DL Tracking Script
+  inputs:
+    targetType: inline
+    script: |
+      $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
+      $cert.Import("$(fetchCert.secureFilePath)", "$(PFX_PASSWORD)", "PersistKeySet")
+      $thumbprint = $cert.Thumbprint
 
-    Write-Host "Using cert thumbprint: $thumbprint"
+      $prevFile = "$(Build.SourcesDirectory)/prev/$(DL_HISTORY_FILE)"
+      if (-not (Test-Path $prevFile)) {
+        Write-Host "No previous file found, initializing empty"
+        '{}' | Out-File $prevFile
+      }
 
-- powershell: |
-    $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
-    $cert.Import("$(fetchCert.secureFilePath)", "$(PFX_PASSWORD)", "PersistKeySet")
-    $thumbprint = $cert.Thumbprint
-
-    Write-Host "Using cert thumbprint: $thumbprint"
-
-    & "$(Build.SourcesDirectory)/Groups/DLchanges.ps1" `
+      & "$(Build.SourcesDirectory)/Groups/DLchanges.ps1" `
         -appId "$(APP_ID)" `
         -orgName "$(ORG_DOMAIN)" `
         -thumbprint $thumbprint `
-        -previous "$(DL_HISTORY_FILE)" `
+        -previous $prevFile `
         -report "$(DL_REPORT_FILE)"
-  displayName: Run DL Tracking Script
 
-- publish: '$(DL_REPORT_FILE)'
+- task: PowerShell@2
+  displayName: Move output to folder
+  inputs:
+    targetType: inline
+    script: |
+      mkdir output
+      Move-Item "$(DL_REPORT_FILE)" output/
+      Move-Item "$(Build.SourcesDirectory)/prev/$(DL_HISTORY_FILE)" output/ -Force
+
+- publish: 'output'
   artifact: DLReport
-  displayName: Publish DL Report
+  displayName: Publish Report + State Files
