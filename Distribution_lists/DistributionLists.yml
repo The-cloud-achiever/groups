@@ -21,6 +21,14 @@ steps:
     secureFile: 'DLTrackingCert.pfx'
 
 - task: PowerShell@2
+  displayName: 🔍 Debug: List all .ps1 files
+  inputs:
+    targetType: inline
+    script: |
+      Write-Host "Listing all .ps1 files:"
+      Get-ChildItem -Path "$(Build.SourcesDirectory)" -Recurse -Filter *.ps1
+      
+- task: PowerShell@2
   displayName: Run DL Tracking Script
   inputs:
     targetType: inline
