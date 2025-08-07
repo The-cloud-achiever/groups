@@ -16,8 +16,8 @@ steps:
   inputs:
     buildType: 'specific'
     project: '$(System.TeamProject)'  # optional
-    definition: 'latest'  # use current pipeline
-    buildVersionToDownload: 'latestFromBranch'
+    definition: 11  # use current pipeline
+    buildVersionToDownload: 'latest'
     branchName: 'refs/heads/main'  # adjust if your branch is different
     artifactName: 'DLReport'
     targetPath: 'prev'
