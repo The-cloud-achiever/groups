@@ -15,7 +15,7 @@ $distributionLists = Get-DistributionGroup | Sort-Object DisplayName
 $currentMembers = @{}
 foreach ($distributionList in $distributionLists) {
     try {
-        $members = Get-DistributionGroupMember -Identity $distributionList.Identity | Select-Object -ExpandProperty PrimarySmtpAddress
+        $members = Get-DistributionGroupMember -Identity $distributionList.PrimarySmtpAddress | Select-Object -ExpandProperty PrimarySmtpAddress
     } catch {
         Write-Warning "Unable to fetch members for $($distributionList.DisplayName): $_"
         $members = @()
@@ -27,7 +27,7 @@ foreach ($distributionList in $distributionLists) {
 $oldmembers = @{}
 if (Test-Path $previous) {
     Write-Host "Loading previous report from $previous"
-    $oldmembers = Get-Content $previous | ConvertFrom-Json -Depth 5
+    $oldmembers = Get-Content $previous | ConvertFrom-Json 
 } else {
     Write-Host "No previous report found, creating new baseline."
 }
