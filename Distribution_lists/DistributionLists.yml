@@ -8,12 +8,12 @@ variables:
 
 steps:
 - checkout: self
-# - task: DownloadPipelineArtifact@2
-#   displayName: Download Previous DL State
-#   inputs:
-#     buildType: 'current'
-#     artifactName: 'DLReport'
-#     targetPath: 'prev'
+- task: DownloadPipelineArtifact@2
+  displayName: Download Previous DL State
+  inputs:
+    buildType: 'current'
+    artifactName: 'DLReport'
+    targetPath: 'prev'
 
 - task: DownloadSecureFile@1
   name: fetchCert
