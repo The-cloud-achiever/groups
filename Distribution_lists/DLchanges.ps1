@@ -7,6 +7,19 @@ param (
 )
 
 Write-Host "Connecting to Exchange Online..."
+
+# Import the cert to memory
+$cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
+$cert.Import("$(fetchCert.secureFilePath)", "$(PFX_PASSWORD)", "PersistKeySet")
+
+# Install cert to Cert:\CurrentUser\My so ExchangeOnline module can find it
+$store = New-Object System.Security.Cryptography.X509Certificates.X509Store "My", "CurrentUser"
+$store.Open("ReadWrite")
+$store.Add($cert)
+$store.Close()
+
+$thumbprint = $cert.Thumbprint
+
 Connect-ExchangeOnline -AppId $appId -Organization $orgName -CertificateThumbprint $thumbprint
 
 Write-Host "Fetching Distribution Lists..."
