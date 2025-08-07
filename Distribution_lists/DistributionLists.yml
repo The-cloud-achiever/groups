@@ -24,6 +24,15 @@ steps:
   inputs:
     secureFile: 'DLTrackingCert.pfx'
 
+# ✅ Install ExchangeOnlineManagement Module
+- task: PowerShell@2
+  displayName: Install ExchangeOnlineManagement Module
+  inputs:
+    targetType: inline
+    script: |
+      Install-Module -Name ExchangeOnlineManagement -Force -Scope CurrentUser -AllowClobber
+
+
 # ✅ Debug script file discovery (optional)
 - task: PowerShell@2
   displayName: Debug - List all .ps1 files
