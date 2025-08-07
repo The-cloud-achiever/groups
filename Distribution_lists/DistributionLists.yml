@@ -21,7 +21,7 @@ steps:
     secureFile: 'DLTrackingCert.pfx'
 
 - task: PowerShell@2
-  displayName:  Debug: List all .ps1 files
+  displayName: List all .ps1 files
   inputs:
     targetType: inline
     script: |
