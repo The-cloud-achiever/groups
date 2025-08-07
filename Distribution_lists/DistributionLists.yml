@@ -11,15 +11,15 @@ steps:
 
 # ✅ Optional: Try to download previous DL state (skip if first run)
 - task: DownloadPipelineArtifact@2
-      displayName: 'Download previous snapshot (non-blocking)'
-      continueOnError: true
-      inputs:
-        artifact: 'DLReport'
-        path: '$(Pipeline.Workspace)/DLReport'
-        source: 'specific'
-        project: '$(System.TeamProject)'
-        pipeline: 11
-        runVersion: 'latest'
+  displayName: 'Download previous snapshot (non-blocking)'
+  continueOnError: true
+  inputs:
+      artifact: 'DLReport'
+      path: '$(Pipeline.Workspace)/DLReport'
+      source: 'specific'
+      project: '$(System.TeamProject)'
+      pipeline: 11
+      runVersion: 'latest'
 
 # ✅ Download the PFX cert from DevOps secure file
 - task: DownloadSecureFile@1
