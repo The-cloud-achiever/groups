@@ -10,6 +10,7 @@ steps:
 - checkout: self
 - task: DownloadPipelineArtifact@2
   displayName: Download Previous DL State
+  continueOnError: true
   inputs:
     buildType: 'current'
     artifactName: 'DLReport'
