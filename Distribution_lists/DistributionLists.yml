@@ -9,18 +9,18 @@ variables:
 steps:
 - checkout: self
 
-# ✅ Optional: Try to download previous DL state (skip if first run)
-# - task: DownloadPipelineArtifact@2
-#   displayName: Download Previous DL State
-#   continueOnError: true
-#   inputs:
-#     buildType: 'specific'
-#     project: '$(System.TeamProject)'  # optional
-#     definition: '$(Build.DefinitionId)'  # use current pipeline
-#     buildVersionToDownload: 'latestFromBranch'
-#     branchName: 'refs/heads/main'  # adjust if your branch is different
-#     artifactName: 'DLReport'
-#     targetPath: 'prev'
+#✅ Optional: Try to download previous DL state (skip if first run)
+- task: DownloadPipelineArtifact@2
+  displayName: Download Previous DL State
+  continueOnError: true
+  inputs:
+    buildType: 'specific'
+    project: '$(System.TeamProject)'  # optional
+    definition: '$(Build.DefinitionId)'  # use current pipeline
+    buildVersionToDownload: 'latestFromBranch'
+    branchName: 'refs/heads/main'  # adjust if your branch is different
+    artifactName: 'DLReport'
+    targetPath: 'prev'
 
 
 # ✅ Download the PFX cert from DevOps secure file
