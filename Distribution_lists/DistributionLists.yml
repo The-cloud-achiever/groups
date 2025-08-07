@@ -64,7 +64,7 @@ steps:
       $thumbprint = $cert.Thumbprint
 
       # Handle first run
-      $prevFile = "$(Build.SourcesDirectory)/prev/$(DL_HISTORY_FILE)"
+      $prevFile = "$(Build.SourcesDirectory)/$(DL_HISTORY_FILE)"
       if (-not (Test-Path $prevFile)) {
         '{}' | Out-File $prevFile -Encoding utf8
         Write-Host "No previous state found — initialized empty JSON."
@@ -86,7 +86,7 @@ steps:
     script: |
       mkdir output
       Move-Item "$(DL_REPORT_FILE)" output/ -Force
-      Move-Item "$(Build.SourcesDirectory)/prev/$(DL_HISTORY_FILE)" output/ -Force
+      Move-Item "$(Build.SourcesDirectory)/$(DL_HISTORY_FILE)" output/ -Force
 
 # ✅ Publish artifact
 - publish: 'output'
