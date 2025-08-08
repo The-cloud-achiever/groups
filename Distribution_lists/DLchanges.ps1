@@ -27,76 +27,121 @@ foreach ($distributionList in $distributionLists) {
 $oldmembers = @{}
 if (Test-Path $previous) {
     Write-Host "Loading previous report from $previous"
-    $oldmembers = Get-Content $previous | ConvertFrom-Json 
+    $oldmembers = Get-Content $previous | ConvertFrom-Json
 } else {
     Write-Host "No previous report found, creating new baseline."
 }
 
-# Generate HTML report
-$html = @"
-<html>
-<head>
-    <style>
-        body { font-family: Arial; }
-        .added { color: green; }
-        .removed { color: darkorange; }
-        .unchanged { color: black; }
-        .newgroup, .deletedgroup { font-weight: bold; background-color: #f9f9f9; }
-        table { border-collapse: collapse; width: 100%; }
-        th, td { padding: 8px 12px; border: 1px solid #ccc; text-align: left; }
-        th { background-color: #eee; }
-    </style>
-</head>
-<body>
-<h2>Distribution List Membership Changes</h2>
-<table>
-<tr><th>Group</th><th>Change</th><th>Member</th></tr>
-"@
+# Categorize groups
+$newGroups = @()
+$deletedGroups = @()
+$groupsWithChanges = @{}
+$allGroupsTable = @{}
 
 $allGroups = $currentMembers.Keys + $oldmembers.Keys | Sort-Object -Unique
-$groupReportRows = @()
 
 foreach ($group in $allGroups) {
     $current = $currentMembers[$group]
     $old = $oldmembers[$group]
 
     if ($null -eq $old) {
-        $groupReportRows += "<tr class='newgroup'><td>$group</td><td colspan='2'>🆕 New Distribution List</td></tr>"
+        $newGroups += $group
+        $groupsWithChanges[$group] = @()
         foreach ($user in $current) {
-            $groupReportRows += "<tr><td>$group</td><td class='added'>Added</td><td class='added'>$user</td></tr>"
+            $groupsWithChanges[$group] += @{ Type = 'Added'; User = $user }
         }
-        continue
     }
-
-    if ($null -eq $current) {
-        $groupReportRows += "<tr class='deletedgroup'><td>$group</td><td colspan='2'>❌ Deleted Distribution List</td></tr>"
+    elseif ($null -eq $current) {
+        $deletedGroups += $group
+        $groupsWithChanges[$group] = @()
         foreach ($user in $old) {
-            $groupReportRows += "<tr><td>$group</td><td class='removed'>Removed</td><td class='removed'>$user</td></tr>"
+            $groupsWithChanges[$group] += @{ Type = 'Removed'; User = $user }
         }
-        continue
+    }
+    else {
+        $added = Compare-Object -ReferenceObject $old -DifferenceObject $current -PassThru | Where-Object { $_ -in $current }
+        $removed = Compare-Object -ReferenceObject $old -DifferenceObject $current -PassThru | Where-Object { $_ -in $old }
+
+        if ($added.Count -gt 0 -or $removed.Count -gt 0) {
+            $groupsWithChanges[$group] = @()
+            foreach ($user in $added) {
+                $groupsWithChanges[$group] += @{ Type = 'Added'; User = $user }
+            }
+            foreach ($user in $removed) {
+                $groupsWithChanges[$group] += @{ Type = 'Removed'; User = $user }
+            }
+        }
     }
 
-    $added = Compare-Object -ReferenceObject $old -DifferenceObject $current -PassThru | Where-Object { $_ -in $current }
-    $removed = Compare-Object -ReferenceObject $old -DifferenceObject $current -PassThru | Where-Object { $_ -in $old }
-
-    foreach ($user in $added) {
-        $groupReportRows += "<tr><td>$group</td><td class='added'>Added</td><td class='added'>$user</td></tr>"
-    }
-    foreach ($user in $removed) {
-        $groupReportRows += "<tr><td>$group</td><td class='removed'>Removed</td><td class='removed'>$user</td></tr>"
+    # All groups section
+    $allGroupsTable[$group] = @()
+    foreach ($user in ($current ?? @())) {
+        $status = 'Unchanged'
+        if ($groupsWithChanges.ContainsKey($group)) {
+            $change = $groupsWithChanges[$group] | Where-Object { $_.User -eq $user }
+            if ($change) {
+                $status = $change.Type
+            }
+        }
+        $allGroupsTable[$group] += @{ Type = $status; User = $user }
     }
 }
 
-if ($groupReportRows.Count -eq 0) {
-    $groupReportRows += "<tr><td colspan='3'>✅ No changes detected</td></tr>"
+# Generate HTML
+$html = @"
+<html>
+<head>
+<style>
+    body { font-family: Arial; }
+    .added { color: green; }
+    .removed { color: darkorange; }
+    .unchanged { color: black; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { padding: 8px 12px; border: 1px solid #ccc; text-align: left; }
+    th { background-color: #eee; }
+</style>
+</head>
+<body>
+<h1>Distribution List Membership Report - $(Get-Date -Format "yyyy-MM-dd")</h1>
+"@
+
+# Section: New Groups
+$html += "<h2>🆕 New Distribution Lists</h2><ul>"
+foreach ($g in $newGroups) { $html += "<li>$g</li>" }
+$html += "</ul>"
+
+# Section: Deleted Groups
+$html += "<h2>❌ Deleted Distribution Lists</h2><ul>"
+foreach ($g in $deletedGroups) { $html += "<li>$g</li>" }
+$html += "</ul>"
+
+# Section: Changed Groups
+$html += "<h2>🔁 Groups With Changes</h2>"
+foreach ($group in $groupsWithChanges.Keys) {
+    $html += "<h3>$group</h3><table><tr><th>Change Type</th><th>Member</th></tr>"
+    foreach ($entry in $groupsWithChanges[$group]) {
+        $html += "<tr><td class='$($entry.Type.ToLower())'>$($entry.Type)</td><td class='$($entry.Type.ToLower())'>$($entry.User)</td></tr>"
+    }
+    $html += "</table>"
 }
 
-$html += ($groupReportRows -join "`n")
-$html += "</table></body></html>"
+# Section: All Groups
+$html += "<h2>📋 All Groups</h2>"
+foreach ($group in $allGroupsTable.Keys | Sort-Object) {
+    $html += "<h3>$group</h3><table><tr><th>Change Type</th><th>Member</th></tr>"
+    foreach ($entry in $allGroupsTable[$group]) {
+        $html += "<tr><td class='$($entry.Type.ToLower())'>$($entry.Type)</td><td>$($entry.User)</td></tr>"
+    }
+    $html += "</table>"
+}
 
+$html += "</body></html>"
+
+# Save report
 Write-Host "Saving report to $report"
 $html | Out-File -Encoding utf8 $report
 
+# Save current state
 Write-Host "Saving current DL state to $previous"
 $currentMembers | ConvertTo-Json -Depth 5 | Out-File $previous
 
