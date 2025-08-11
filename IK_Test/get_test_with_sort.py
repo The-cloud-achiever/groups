@@ -245,7 +245,7 @@ def send_email(html_path, pdf_path):
     # Add your custom message at the top of the email body
     custom_message = """
     <p>Dear recipient,</p>
-    <p>Please find the Azure AD Group Membership report below. The PDF version is attached for your convenience.</p>
+    <p>Please find the report for Azure AD Group Membership Changes. The PDF version is attached for your convenience.</p>
     <p>Best regards,<br>IT Team</p>
     <hr>
     """
