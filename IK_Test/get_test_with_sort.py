@@ -149,8 +149,8 @@ def compare_snapshots(current, previous):
 #-------------------Generate Report----------
 def generate_html_report(snapshot, output_path, added_groups, deleted_groups):
     html = [
-        "<html><head><style>",
-        "body { font-family: Arial, sans-serif; }",
+        "<html><head><meta charset='UTF-8'><style>",
+        "body { font-family: "Segoe UI", "Arial", "Helvetica Neue", sans-serif; }",
         "h2 { color: #333; }",
         ".added { color: green; }",
         ".removed { color: darkorange; }",
