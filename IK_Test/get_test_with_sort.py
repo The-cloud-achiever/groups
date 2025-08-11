@@ -159,6 +159,7 @@ def generate_html_report(snapshot, output_path, added_groups, deleted_groups):
         "th, td { padding: 8px 12px; border: 1px solid #ccc; text-align: left; }",
         "</style></head><body>",
         "<h1>Azure AD Group Membership Report</h1>"
+        f"<p>Report generated on: <strong>{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</strong></p><br>"
     ]
 
     # Add added and deleted groups
