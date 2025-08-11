@@ -249,7 +249,7 @@ def send_email(html_path, pdf_path):
     <p>Best regards,<br>IT Team</p>
     <hr>
     """
-    full_html_body = custom_message + html_content
+    full_html_body = custom_message 
 
     email_payload = {
         "message": {
