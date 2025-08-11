@@ -47,15 +47,19 @@ foreach ($group in $allGroups) {
     if ($null -eq $old) {
         $newGroups += $group
         $groupsWithChanges[$group] = @()
-        foreach ($user in $current) {
-            $groupsWithChanges[$group] += @{ Type = 'Added'; User = $user }
+        if ($null -ne $current) {
+            foreach ($user in $current) {
+                $groupsWithChanges[$group] += @{ Type = 'Added'; User = $user }
+            }
         }
     }
     elseif ($null -eq $current) {
         $deletedGroups += $group
         $groupsWithChanges[$group] = @()
-        foreach ($user in $old) {
-            $groupsWithChanges[$group] += @{ Type = 'Removed'; User = $user }
+        if ($null -ne $old) {
+            foreach ($user in $old) {
+                $groupsWithChanges[$group] += @{ Type = 'Removed'; User = $user }
+            }
         }
     }
     else {
@@ -75,15 +79,17 @@ foreach ($group in $allGroups) {
 
     # All groups section
     $allGroupsTable[$group] = @()
-    foreach ($user in ($current ?? @())) {
-        $status = 'Unchanged'
-        if ($groupsWithChanges.ContainsKey($group)) {
-            $change = $groupsWithChanges[$group] | Where-Object { $_.User -eq $user }
-            if ($change) {
-                $status = $change.Type
+    if ($null -ne $current) {
+        foreach ($user in $current) {
+            $status = 'Unchanged'
+            if ($groupsWithChanges.ContainsKey($group)) {
+                $change = $groupsWithChanges[$group] | Where-Object { $_.User -eq $user }
+                if ($change) {
+                    $status = $change.Type
+                }
             }
+            $allGroupsTable[$group] += @{ Type = $status; User = $user }
         }
-        $allGroupsTable[$group] += @{ Type = $status; User = $user }
     }
 }
 
@@ -105,18 +111,18 @@ $html = @"
 <h1>Distribution List Membership Report - $(Get-Date -Format "yyyy-MM-dd")</h1>
 "@
 
-# Section: New Groups
+# Section: New DLs
 $html += "<h2>🆕 New Distribution Lists</h2><ul>"
 foreach ($g in $newGroups) { $html += "<li>$g</li>" }
 $html += "</ul>"
 
-# Section: Deleted Groups
+# Section: Deleted DLs
 $html += "<h2>❌ Deleted Distribution Lists</h2><ul>"
 foreach ($g in $deletedGroups) { $html += "<li>$g</li>" }
 $html += "</ul>"
 
-# Section: Changed Groups
-$html += "<h2>🔁 Groups With Changes</h2>"
+# Section: Groups with Changes
+$html += "<h2>Groups With Changes</h2>"
 foreach ($group in $groupsWithChanges.Keys) {
     $html += "<h3>$group</h3><table><tr><th>Change Type</th><th>Member</th></tr>"
     foreach ($entry in $groupsWithChanges[$group]) {
@@ -126,7 +132,7 @@ foreach ($group in $groupsWithChanges.Keys) {
 }
 
 # Section: All Groups
-$html += "<h2>📋 All Groups</h2>"
+$html += "<h2>All Groups</h2>"
 foreach ($group in $allGroupsTable.Keys | Sort-Object) {
     $html += "<h3>$group</h3><table><tr><th>Change Type</th><th>Member</th></tr>"
     foreach ($entry in $allGroupsTable[$group]) {
