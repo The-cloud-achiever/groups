@@ -67,7 +67,7 @@ steps:
       $prevFile = "$(Build.SourcesDirectory)/$(DL_HISTORY_FILE)"
       if (-not (Test-Path $prevFile)) {
         '{}' | Out-File $prevFile -Encoding utf8
-        Write-Host "No previous state found — initialized empty JSON."
+        Write-Host "No previous state found — initialized empty JSON "$prevFile"."
       }
 
       # Execute main script

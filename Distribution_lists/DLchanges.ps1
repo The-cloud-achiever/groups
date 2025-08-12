@@ -10,8 +10,11 @@ Write-Host "Connecting to Exchange Online..."
 Connect-ExchangeOnline -AppId $appId -Organization $orgName -CertificateThumbprint $thumbprint
 
 Write-Host "Fetching Distribution Lists..."
+
+#Fetch distribution lists and sort by display name
 $distributionLists = Get-DistributionGroup | Sort-Object DisplayName
 
+# Fetch current members for each distribution list using hash table
 $currentMembers = @{}
 foreach ($distributionList in $distributionLists) {
     try {
@@ -112,12 +115,12 @@ $html = @"
 "@
 
 # Section: New DLs
-$html += "<h2>🆕 New Distribution Lists</h2><ul>"
+$html += "<h2> New Distribution Lists</h2><ul>"
 foreach ($g in $newGroups) { $html += "<li>$g</li>" }
 $html += "</ul>"
 
 # Section: Deleted DLs
-$html += "<h2>❌ Deleted Distribution Lists</h2><ul>"
+$html += "<h2> Deleted Distribution Lists</h2><ul>"
 foreach ($g in $deletedGroups) { $html += "<li>$g</li>" }
 $html += "</ul>"
 
