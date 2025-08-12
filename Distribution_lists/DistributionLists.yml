@@ -14,13 +14,12 @@ steps:
   displayName: Download Previous DL State
   continueOnError: true
   inputs:
-    buildType: 'specific'
-    project: '$(System.TeamProject)'  # optional
-    definition: 11  # use current pipeline
-    buildVersionToDownload: 'latest'
-    branchName: 'refs/heads/main'  # adjust if your branch is different
-    artifactName: 'DLReport'
-    targetPath: 'prev'
+    artifact: 'DLReport'
+    path: '$(Pipeline.Workspace)/DLReport'
+    source: 'specific'
+    project: '$(System.TeamProject)'
+    pipeline: 11
+    runVersion: 'latest'
 
 
 # ✅ Download the PFX cert from DevOps secure file
