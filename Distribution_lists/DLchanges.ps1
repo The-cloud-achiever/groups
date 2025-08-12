@@ -27,27 +27,13 @@ foreach ($distributionList in $distributionLists) {
 }
 
 # Load previous state
-# Load previous state
-Write-Host "Looking for previous state at path: $previous"
-
 $oldmembers = @{}
 if (Test-Path $previous) {
     Write-Host "Loading previous report from $previous"
-    $json = Get-Content $previous -Raw
-    $converted = $json | ConvertFrom-Json
-
-    # Convert PSCustomObject to hashtable
-    $oldmembers = @{}
-    foreach ($entry in $converted.PSObject.Properties) {
-        $oldmembers[$entry.Name] = $entry.Value
-    }
-
-    Write-Host "Loaded $($oldmembers.Keys.Count) groups from previous state."
+    $oldmembers = Get-Content $previous | ConvertFrom-Json
 } else {
-    Write-Host "No previous report found — creating baseline."
+    Write-Host "No previous report found, creating new baseline."
 }
-Write-Host "Previous state keys:"
-$oldmembers.Keys | ForEach-Object { Write-Host "- $_" }
 
 # Categorize groups
 $newGroups = @()
@@ -61,7 +47,7 @@ foreach ($group in $allGroups) {
     $current = $currentMembers[$group]
     $old = $oldmembers[$group]
 
-    if ($null -eq $old) { #checks if DL is new and adds it to newGroups
+    if ($null -eq $old) {
         $newGroups += $group
         $groupsWithChanges[$group] = @()
         if ($null -ne $current) {
@@ -70,7 +56,7 @@ foreach ($group in $allGroups) {
             }
         }
     }
-    elseif ($null -eq $current) { #checks if DL is deleted and adds it to deletedGroups
+    elseif ($null -eq $current) {
         $deletedGroups += $group
         $groupsWithChanges[$group] = @()
         if ($null -ne $old) {
@@ -79,7 +65,7 @@ foreach ($group in $allGroups) {
             }
         }
     }
-    else { #checks if DL has changes in members and adds it to groupsWithChanges
+    else {
         $added = Compare-Object -ReferenceObject $old -DifferenceObject $current -PassThru | Where-Object { $_ -in $current }
         $removed = Compare-Object -ReferenceObject $old -DifferenceObject $current -PassThru | Where-Object { $_ -in $old }
 
@@ -129,36 +115,36 @@ $html = @"
 "@
 
 # Section: New DLs
-$html += '<h2> New Distribution Lists</h2><ul>'
+$html += "<h2> New Distribution Lists</h2><ul>"
 foreach ($g in $newGroups) { $html += "<li>$g</li>" }
-$html += '</ul>'
+$html += "</ul>"
 
 # Section: Deleted DLs
-$html += '<h2> Deleted Distribution Lists</h2><ul>'
+$html += "<h2> Deleted Distribution Lists</h2><ul>"
 foreach ($g in $deletedGroups) { $html += "<li>$g</li>" }
-$html += '</ul>'
+$html += "</ul>"
 
 # Section: Groups with Changes
-$html += '<h2>Groups With Changes</h2>'
+$html += "<h2>Groups With Changes</h2>"
 foreach ($group in $groupsWithChanges.Keys) {
     $html += "<h3>$group</h3><table><tr><th>Change Type</th><th>Member</th></tr>"
     foreach ($entry in $groupsWithChanges[$group]) {
         $html += "<tr><td class='$($entry.Type.ToLower())'>$($entry.Type)</td><td class='$($entry.Type.ToLower())'>$($entry.User)</td></tr>"
     }
-    $html += '</table>'
+    $html += "</table>"
 }
 
 # Section: All Groups
-$html += '<h2>All Groups</h2>'
+$html += "<h2>All Groups</h2>"
 foreach ($group in $allGroupsTable.Keys | Sort-Object) {
     $html += "<h3>$group</h3><table><tr><th>Change Type</th><th>Member</th></tr>"
     foreach ($entry in $allGroupsTable[$group]) {
         $html += "<tr><td class='$($entry.Type.ToLower())'>$($entry.Type)</td><td>$($entry.User)</td></tr>"
     }
-    $html += '</table>'
+    $html += "</table>"
 }
 
-$html += '</body></html>'
+$html += "</body></html>"
 
 # Save report
 Write-Host "Saving report to $report"
