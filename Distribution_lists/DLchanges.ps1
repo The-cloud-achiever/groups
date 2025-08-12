@@ -27,13 +27,27 @@ foreach ($distributionList in $distributionLists) {
 }
 
 # Load previous state
+# Load previous state
+Write-Host "Looking for previous state at path: $previous"
+
 $oldmembers = @{}
 if (Test-Path $previous) {
     Write-Host "Loading previous report from $previous"
-    $oldmembers = Get-Content $previous | ConvertFrom-Json
+    $json = Get-Content $previous -Raw
+    $converted = $json | ConvertFrom-Json
+
+    # Convert PSCustomObject to hashtable
+    $oldmembers = @{}
+    foreach ($entry in $converted.PSObject.Properties) {
+        $oldmembers[$entry.Name] = $entry.Value
+    }
+
+    Write-Host "Loaded $($oldmembers.Keys.Count) groups from previous state."
 } else {
-    Write-Host "No previous report found, creating new baseline."
+    Write-Host "No previous report found — creating baseline."
 }
+Write-Host "Previous state keys:"
+$oldmembers.Keys | ForEach-Object { Write-Host "- $_" }
 
 # Categorize groups
 $newGroups = @()
@@ -47,7 +61,7 @@ foreach ($group in $allGroups) {
     $current = $currentMembers[$group]
     $old = $oldmembers[$group]
 
-    if ($null -eq $old) {
+    if ($null -eq $old) {#checks if DL is new and adds it to newGroups
         $newGroups += $group
         $groupsWithChanges[$group] = @()
         if ($null -ne $current) {
@@ -56,7 +70,7 @@ foreach ($group in $allGroups) {
             }
         }
     }
-    elseif ($null -eq $current) {
+    elseif ($null -eq $current) {#checks if DL is deleted and adds it to deletedGroups
         $deletedGroups += $group
         $groupsWithChanges[$group] = @()
         if ($null -ne $old) {
@@ -65,7 +79,7 @@ foreach ($group in $allGroups) {
             }
         }
     }
-    else {
+    else {#checks if DL has changes in members and adds it to groupsWithChanges
         $added = Compare-Object -ReferenceObject $old -DifferenceObject $current -PassThru | Where-Object { $_ -in $current }
         $removed = Compare-Object -ReferenceObject $old -DifferenceObject $current -PassThru | Where-Object { $_ -in $old }
 
