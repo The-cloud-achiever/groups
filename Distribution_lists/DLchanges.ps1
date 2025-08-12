@@ -2,19 +2,16 @@ param (
     [string]$appId,
     [string]$orgName,
     [string]$thumbprint,
-    [string]$DL_HISTORY_FILE,
-    [string]$report = "DLchanges_report.html"
+    [string]$previous,
+    [string]$report
 )
 
 Write-Host "Connecting to Exchange Online..."
 Connect-ExchangeOnline -AppId $appId -Organization $orgName -CertificateThumbprint $thumbprint
 
 Write-Host "Fetching Distribution Lists..."
-
-#Fetch distribution lists and sort by display name
 $distributionLists = Get-DistributionGroup | Sort-Object DisplayName
 
-# Fetch current members for each distribution list using hash table
 $currentMembers = @{}
 foreach ($distributionList in $distributionLists) {
     try {
@@ -30,9 +27,17 @@ foreach ($distributionList in $distributionLists) {
 $oldmembers = @{}
 if (Test-Path $previous) {
     Write-Host "Loading previous report from $previous"
-    $oldmembers = Get-Content $previous | ConvertFrom-Json
+    $json = Get-Content $previous -Raw
+    $converted = $json | ConvertFrom-Json
+
+    # Force PSCustomObject to Hashtable
+    foreach ($entry in $converted.PSObject.Properties) {
+        $oldmembers[$entry.Name] = $entry.Value
+    }
+
+    Write-Host "Loaded $($oldmembers.Keys.Count) groups from previous state."
 } else {
-    Write-Host "No previous report found, creating new baseline."
+    Write-Host "No previous report found, using blank state."
 }
 
 # Categorize groups
@@ -50,19 +55,15 @@ foreach ($group in $allGroups) {
     if ($null -eq $old) {
         $newGroups += $group
         $groupsWithChanges[$group] = @()
-        if ($null -ne $current) {
-            foreach ($user in $current) {
-                $groupsWithChanges[$group] += @{ Type = 'Added'; User = $user }
-            }
+        foreach ($user in $current) {
+            $groupsWithChanges[$group] += @{ Type = 'Added'; User = $user }
         }
     }
     elseif ($null -eq $current) {
         $deletedGroups += $group
         $groupsWithChanges[$group] = @()
-        if ($null -ne $old) {
-            foreach ($user in $old) {
-                $groupsWithChanges[$group] += @{ Type = 'Removed'; User = $user }
-            }
+        foreach ($user in $old) {
+            $groupsWithChanges[$group] += @{ Type = 'Removed'; User = $user }
         }
     }
     else {
@@ -82,21 +83,19 @@ foreach ($group in $allGroups) {
 
     # All groups section
     $allGroupsTable[$group] = @()
-    if ($null -ne $current) {
-        foreach ($user in $current) {
-            $status = 'Unchanged'
-            if ($groupsWithChanges.ContainsKey($group)) {
-                $change = $groupsWithChanges[$group] | Where-Object { $_.User -eq $user }
-                if ($change) {
-                    $status = $change.Type
-                }
+    foreach ($user in ($current -ne $null ? $current : @())) {
+        $status = 'Unchanged'
+        if ($groupsWithChanges.ContainsKey($group)) {
+            $change = $groupsWithChanges[$group] | Where-Object { $_.User -eq $user }
+            if ($change) {
+                $status = $change.Type
             }
-            $allGroupsTable[$group] += @{ Type = $status; User = $user }
         }
+        $allGroupsTable[$group] += @{ Type = $status; User = $user }
     }
 }
 
-# Generate HTML
+# Generate HTML report
 $html = @"
 <html>
 <head>
@@ -114,18 +113,18 @@ $html = @"
 <h1>Distribution List Membership Report - $(Get-Date -Format "yyyy-MM-dd")</h1>
 "@
 
-# Section: New DLs
-$html += "<h2> New Distribution Lists</h2><ul>"
+# New groups
+$html += "<h2>🆕 New Distribution Lists</h2><ul>"
 foreach ($g in $newGroups) { $html += "<li>$g</li>" }
 $html += "</ul>"
 
-# Section: Deleted DLs
-$html += "<h2> Deleted Distribution Lists</h2><ul>"
+# Deleted groups
+$html += "<h2>❌ Deleted Distribution Lists</h2><ul>"
 foreach ($g in $deletedGroups) { $html += "<li>$g</li>" }
 $html += "</ul>"
 
-# Section: Groups with Changes
-$html += "<h2>Groups With Changes</h2>"
+# Groups with changes
+$html += "<h2>🔁 Groups With Changes</h2>"
 foreach ($group in $groupsWithChanges.Keys) {
     $html += "<h3>$group</h3><table><tr><th>Change Type</th><th>Member</th></tr>"
     foreach ($entry in $groupsWithChanges[$group]) {
@@ -134,8 +133,8 @@ foreach ($group in $groupsWithChanges.Keys) {
     $html += "</table>"
 }
 
-# Section: All Groups
-$html += "<h2>All Groups</h2>"
+# All groups
+$html += "<h2>📋 All Groups</h2>"
 foreach ($group in $allGroupsTable.Keys | Sort-Object) {
     $html += "<h3>$group</h3><table><tr><th>Change Type</th><th>Member</th></tr>"
     foreach ($entry in $allGroupsTable[$group]) {
@@ -146,11 +145,10 @@ foreach ($group in $allGroupsTable.Keys | Sort-Object) {
 
 $html += "</body></html>"
 
-# Save report
+# Save files
 Write-Host "Saving report to $report"
 $html | Out-File -Encoding utf8 $report
 
-# Save current state
 Write-Host "Saving current DL state to $previous"
 $currentMembers | ConvertTo-Json -Depth 5 | Out-File $previous
 

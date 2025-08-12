@@ -4,25 +4,24 @@ pool:
   vmImage: 'windows-latest'
 
 variables:
-- group: DL-Secrets
+- group: DL-Secrets  # only used for APP_ID, ORG_DOMAIN, PFX_PASSWORD
 
 steps:
 - checkout: self
 
-#✅ Optional: Try to download previous DL state (skip if first run)
+# ✅ Download previous report artifact from last successful run
 - task: DownloadPipelineArtifact@2
   displayName: Download Previous DL State
   continueOnError: true
   inputs:
     artifact: 'DLReport'
-    path: '$(Pipeline.Workspace)/DLReport'
+    path: '$(Build.SourcesDirectory)/prev'
     source: 'specific'
     project: '$(System.TeamProject)'
     pipeline: 11
     runVersion: 'latest'
 
-
-# ✅ Download the PFX cert from DevOps secure file
+# ✅ Download PFX certificate
 - task: DownloadSecureFile@1
   name: fetchCert
   inputs:
@@ -34,9 +33,9 @@ steps:
   inputs:
     targetType: inline
     script: |
-      Install-Module -Name ExchangeOnlineManagement -Force -Scope CurrentUser -AllowClobber
+      Install-Module ExchangeOnlineManagement -Force -Scope CurrentUser -AllowClobber
 
-# ✅ Debug: show all scripts (optional)
+# ✅ Debug script path (optional)
 - task: PowerShell@2
   displayName: Debug - List all .ps1 files
   inputs:
@@ -44,50 +43,50 @@ steps:
     script: |
       Get-ChildItem -Path "$(Build.SourcesDirectory)" -Recurse -Filter *.ps1
 
-# ✅ Run your DL script (without importing cert again)
+# ✅ Run the main script
 - task: PowerShell@2
   displayName: Run DL Tracking Script
   inputs:
     targetType: inline
     script: |
-      # Import certificate into memory and install into store
+      # Import certificate
       $certPath = "$(fetchCert.secureFilePath)"
       $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
       $cert.Import($certPath, "$(PFX_PASSWORD)", "PersistKeySet")
-
       $store = New-Object System.Security.Cryptography.X509Certificates.X509Store "My", "CurrentUser"
       $store.Open("ReadWrite")
       $store.Add($cert)
       $store.Close()
-
       $thumbprint = $cert.Thumbprint
 
-      # Handle first run
-      $prevFile = "$(Build.SourcesDirectory)/$(DL_HISTORY_FILE)"
+      # Define file paths directly (no variables)
+      $prevFile = "$(Build.SourcesDirectory)/prev/previousMembers.json"
+      $reportFile = "$(Build.SourcesDirectory)/DLchanges_Report.html"
+
+      # Create baseline if missing
       if (-not (Test-Path $prevFile)) {
         '{}' | Out-File $prevFile -Encoding utf8
-        Write-Host "No previous state found — initialized empty JSON "$prevFile"."
+        Write-Host "No previous state found — initialized empty JSON at $prevFile"
       }
 
-      # Execute main script
       & "$(Build.SourcesDirectory)/Distribution_lists/DLchanges.ps1" `
         -appId "$(APP_ID)" `
         -orgName "$(ORG_DOMAIN)" `
         -thumbprint $thumbprint `
         -previous $prevFile `
-        -report "$(DL_REPORT_FILE)"
+        -report $reportFile
 
-# ✅ Move results to output folder
+# ✅ Move files for publishing
 - task: PowerShell@2
   displayName: Move output files to folder
   inputs:
     targetType: inline
     script: |
       mkdir output
-      Move-Item "$(DL_REPORT_FILE)" output/ -Force
-      Move-Item "$(Build.SourcesDirectory)/$(DL_HISTORY_FILE)" output/ -Force
+      Move-Item "$(Build.SourcesDirectory)/DLchanges_Report.html" output/ -Force
+      Move-Item "$(Build.SourcesDirectory)/prev/previousMembers.json" output/ -Force
 
-# ✅ Publish artifact
-- publish: 'output'
+# ✅ Publish output folder as artifact
+- publish: output
   artifact: DLReport
   displayName: Publish Report + State Files
