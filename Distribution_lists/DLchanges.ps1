@@ -257,11 +257,11 @@ try {
     # Prefer Invoke-MgGraphRequest; fall back to Invoke-RestMethod with the SDK token
     $json = $payload | ConvertTo-Json -Depth 10
     try {
-        Invoke-MgGraphRequest -Method POST -Uri "https://graph.microsoft.com/v1.0/users/$fromAddr/sendMail" `
+        Invoke-MgGraphRequest -Method POST -Uri "https://graph.microsoft.com/v1.0/users/$mailFrom/sendMail" `
           -ContentType 'application/json' -Body $json -ErrorAction Stop
     } catch {
         $token = (Get-MgContext).AccessToken
-        Invoke-RestMethod -Method POST -Uri "https://graph.microsoft.com/v1.0/users/$fromAddr/sendMail" `
+        Invoke-RestMethod -Method POST -Uri "https://graph.microsoft.com/v1.0/users/$mailFrom/sendMail" `
           -Headers @{ Authorization = "Bearer $token" } `
           -ContentType 'application/json' -Body $json -ErrorAction Stop
     }
