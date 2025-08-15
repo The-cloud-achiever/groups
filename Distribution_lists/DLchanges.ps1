@@ -14,17 +14,17 @@ function AsStringArray {
     foreach ($i in @($InputValue)) {
         if ($null -eq $i) { continue }
         if ($i -is [psobject]) {
-            if ($i.PSObject.Properties['User'])               { $s = [string]$i.User }
-            elseif ($i.PSObject.Properties['PrimarySmtpAddress']) { $s = [string]$i.PrimarySmtpAddress }
-            elseif ($i.PSObject.Properties['Value'])          { $s = [string]$i.Value }
-            elseif ($i.PSObject.Properties['InputObject'])    { $s = [string]$i.InputObject }
-            else                                              { $s = [string]$i }
+            if ($i.PSObject.Properties['User'])                 { $s = [string]$i.User }
+            elseif ($i.PSObject.Properties['PrimarySmtpAddress']){ $s = [string]$i.PrimarySmtpAddress }
+            elseif ($i.PSObject.Properties['Value'])            { $s = [string]$i.Value }
+            elseif ($i.PSObject.Properties['InputObject'])      { $s = [string]$i.InputObject }
+            else                                                { $s = [string]$i }
         } else {
             $s = [string]$i
         }
         if ($s) { $out += $s.Trim() }
     }
-    return $out  # [] if empty
+    return $out
 }
 
 Write-Host "Connecting to Exchange Online..."
@@ -44,7 +44,7 @@ foreach ($distributionList in $distributionLists) {
                  | Select-Object -ExpandProperty PrimarySmtpAddress
         $currentMembers[$display] = AsStringArray $members
     } catch {
-        Write-Warning "Unable to fetch members for $display : $_"
+        Write-Warning "Unable to fetch members for $display: $_"
         $currentMembers[$display] = @()
     }
 }
@@ -67,42 +67,48 @@ if (Test-Path $previous) {
     Write-Host "No previous state found. Using empty baseline."
 }
 
-# Compare by GROUP NAMES only for new/deleted
+# New/Deleted/Common by NAME only
 $currentGroupNames = @($currentMembers.Keys)
 $oldGroupNames     = @($oldmembers.Keys)
 
 $newGroups     = $currentGroupNames | Where-Object { $_ -notin $oldGroupNames } | Sort-Object
 $deletedGroups = $oldGroupNames     | Where-Object { $_ -notin $currentGroupNames } | Sort-Object
-$commonGroups  = $currentGroupNames | Where-Object { $_ -in $oldGroupNames }        | Sort-Object
+$commonGroups  = $currentGroupNames | Where-Object { $_ -in $oldGroupNames } | Sort-Object
 
 $groupsWithChanges = @{}
 $allGroupsTable    = @{}
 
-# New groups: mark all current members as Added
+# New groups -> Added
 foreach ($g in $newGroups) {
     $groupsWithChanges[$g] = @()
-    foreach ($user in (AsStringArray $currentMembers[$g])) {
+    foreach ($user in $currentMembers[$g]) {
         $groupsWithChanges[$g] += @{ Type = 'Added'; User = $user }
     }
 }
 
-# Deleted groups: mark all old members as Removed
+# Deleted groups -> Removed
 foreach ($g in $deletedGroups) {
     $groupsWithChanges[$g] = @()
-    foreach ($user in (AsStringArray $oldmembers[$g])) {
+    foreach ($user in $oldmembers[$g]) {
         $groupsWithChanges[$g] += @{ Type = 'Removed'; User = $user }
     }
 }
 
-# Common groups: compare members; hard-guard against $null before Compare-Object
+# Common groups: safe Compare-Object
 foreach ($g in $commonGroups) {
-    $curr = AsStringArray (if ($currentMembers.ContainsKey($g)) { $currentMembers[$g] } else { @() })
-    $old  = AsStringArray (if ($oldmembers.ContainsKey($g))     { $oldmembers[$g]     } else { @() })
+    # Avoid inline-if-in-expression; assign first
+    $currSrc = @()
+    if ($currentMembers.ContainsKey($g)) { $currSrc = $currentMembers[$g] }
+    $oldSrc  = @()
+    if ($oldmembers.ContainsKey($g))     { $oldSrc  = $oldmembers[$g]     }
+
+    $curr = AsStringArray $currSrc
+    $old  = AsStringArray $oldSrc
 
     if ($null -eq $curr) { $curr = @() }
     if ($null -eq $old)  { $old  = @() }
 
-    $diff = Compare-Object -ReferenceObject $old -DifferenceObject $curr
+    $diff    = Compare-Object -ReferenceObject $old -DifferenceObject $curr
     $added   = @($diff | Where-Object SideIndicator -eq '=>' | Select-Object -ExpandProperty InputObject | ForEach-Object { ([string]$_).Trim() })
     $removed = @($diff | Where-Object SideIndicator -eq '<=' | Select-Object -ExpandProperty InputObject | ForEach-Object { ([string]$_).Trim() })
 
@@ -113,10 +119,10 @@ foreach ($g in $commonGroups) {
     }
 }
 
-# All Groups (alphabetical) - show current groups and member statuses
+# All Groups table (current groups only, alphabetical)
 foreach ($g in ($currentGroupNames | Sort-Object)) {
     $allGroupsTable[$g] = @()
-    foreach ($user in (AsStringArray $currentMembers[$g])) {
+    foreach ($user in $currentMembers[$g]) {
         $status = 'Unchanged'
         if ($groupsWithChanges.ContainsKey($g)) {
             $change = $groupsWithChanges[$g] | Where-Object { $_.User -eq $user }
