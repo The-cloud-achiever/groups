@@ -4,8 +4,8 @@ pool:
   vmImage: 'windows-latest'
 
 variables:
-- group: DL-Secrets   # APP_ID, TENANT_ID, ORG_DOMAIN, PFX_PASSWORD, MAIL_FROM, MAIL_TO, MAIL_SUBJECT
-# (optional but recommended) pin versions to avoid surprises
+- group: DL-Secrets   # APP_ID, TENANT_ID, ORG_DOMAIN, PFX_password, MAIL_FROM, MAIL_TO, MAIL_SUBJECT, DL_HISTORY_FILE, DL_REPORT_FILE
+# Pin (optional)
 - name: EOMVersion
   value: '3.5.0'
 - name: MGVersion
@@ -14,7 +14,7 @@ variables:
 steps:
 - checkout: self
 
-# Download previous snapshot & report from last successful run
+# Download previous state/report from last successful build of pipeline 11
 - task: DownloadPipelineArtifact@2
   displayName: Download Previous DL State
   continueOnError: true
@@ -26,23 +26,21 @@ steps:
     pipeline: 11
     runVersion: 'latest'
 
-# Download the PFX used by your app (cert-based auth)
+# Download certificate (PFX) from Secure Files
 - task: DownloadSecureFile@1
   name: fetchCert
   displayName: Download PFX certificate
   inputs:
     secureFile: 'DLTrackingCert.pfx'
 
-# Install only what we need (no caching, no big meta-module)
+# Install ExchangeOnlineManagement + Graph submodules (no meta-module)
 - task: PowerShell@2
-  displayName: 'Install Modules (EXO + Graph submodules)'
+  displayName: Install Modules (EXO + Graph)
   inputs:
     targetType: inline
     pwsh: true
     script: |
       $ProgressPreference = 'SilentlyContinue'
-
-      # Make PSGallery trusted + ensure NuGet provider exists
       Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
       if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
         Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
@@ -55,20 +53,14 @@ steps:
       )
 
       foreach ($m in $mods) {
-        # Check if the exact version is available locally
-        $have = Get-Module -ListAvailable -Name $m.Name |
-                Where-Object { $_.Version -eq [version]$m.Version }
-
+        $have = Get-Module -ListAvailable -Name $m.Name | Where-Object { $_.Version -eq [version]$m.Version }
         if (-not $have) {
-          Install-Module -Name $m.Name -RequiredVersion $m.Version `
-            -Scope CurrentUser -Force -AllowClobber -AcceptLicense -ErrorAction Stop
+          Install-Module -Name $m.Name -RequiredVersion $m.Version -Scope CurrentUser -Force -AllowClobber -AcceptLicense -ErrorAction Stop
         }
-
         Import-Module -Name $m.Name -RequiredVersion $m.Version -Force
       }
 
-
-# (Optional) list scripts for quick sanity check
+# (Optional) list scripts
 - task: PowerShell@2
   displayName: Debug - List all .ps1 files
   inputs:
@@ -77,7 +69,7 @@ steps:
     script: |
       Get-ChildItem -Path "$(Build.SourcesDirectory)" -Recurse -Filter *.ps1
 
-# Run the main script (build report + email via Graph app-only)
+# Run your script (build report + email via Graph app-only)
 - task: PowerShell@2
   displayName: Run DL Tracking Script
   inputs:
@@ -85,44 +77,46 @@ steps:
     pwsh: true
     script: |
       # Import PFX to CurrentUser\My
-      $pfxPath = "$env:PFX_PATH"
-      if (-not $pfxPath) { $pfxPath = "$(fetchCert.secureFilePath)" }  # fallback if you didn't pass PFX_PATH
-      $pfxPass = ConvertTo-SecureString $env:PFX_PASSWORD -AsPlainText -Force
-
-      $imported = Import-PfxCertificate -FilePath $pfxPath -Password $pfxPass -CertStoreLocation Cert:\CurrentUser\My
+      $pfxPass   = ConvertTo-SecureString $env:PFX_PASSWORD -AsPlainText -Force
+      $imported  = Import-PfxCertificate -FilePath "$(fetchCert.secureFilePath)" -Password $pfxPass -CertStoreLocation Cert:\CurrentUser\My
       $thumbprint = $imported.Thumbprint
       Write-Host "Imported cert thumbprint: $thumbprint"
 
-      $prevFile   = "$(Build.SourcesDirectory)/prev/previousMembers.json"
-      $reportFile = "$(Build.SourcesDirectory)/DLchanges_Report.html"
+      # Paths from variable group
+      $prevFile   = Join-Path "$(Build.SourcesDirectory)/prev" $env:DL_HISTORY_FILE
+      $reportFile = Join-Path "$(Build.SourcesDirectory)"       $env:DL_REPORT_FILE
 
       if (-not (Test-Path $prevFile)) {
         '{}' | Out-File $prevFile -Encoding utf8
         Write-Host "No previous state found — initialized empty JSON at $prevFile"
       }
 
-      # Use env vars (no $() expansion issues)
+      # Quick sanity echo
+      Write-Host "Using TenantId: $($env:TENANT_ID)"
+      Write-Host "Report file: $reportFile"
+      Write-Host "History file: $prevFile"
+
       & "$(Build.SourcesDirectory)/Distribution_lists/DLchanges.ps1" `
-        -appId     $env:APP_ID `
-        -tenantId  $env:TENANT_ID `
-        -orgName   $env:ORG_DOMAIN `
+        -appId      $env:APP_ID `
+        -tenantId   $env:TENANT_ID `
+        -orgName    $env:ORG_DOMAIN `
         -thumbprint $thumbprint `
-        -previous  $prevFile `
-        -report    $reportFile `
-        -mailFrom  $env:MAIL_FROM `
-        -mailTo    $env:MAIL_TO `
+        -previous   $prevFile `
+        -report     $reportFile `
+        -mailFrom   $env:MAIL_FROM `
+        -mailTo     $env:MAIL_TO `
         -mailSubject $env:MAIL_SUBJECT
   env:
-    # bind pipeline/group vars to env for the script
+    # map variable-group names to environment variables
     APP_ID: $(APP_ID)
     TENANT_ID: $(TENANT_ID)
     ORG_DOMAIN: $(ORG_DOMAIN)
-    PFX_PASSWORD: $(PFX_PASSWORD)
+    PFX_PASSWORD: $(PFX_password)   # note: lowercase p in the variable group
     MAIL_FROM: $(MAIL_FROM)
     MAIL_TO: $(MAIL_TO)
     MAIL_SUBJECT: $(MAIL_SUBJECT)
-
-
+    DL_HISTORY_FILE: $(DL_HISTORY_FILE)
+    DL_REPORT_FILE: $(DL_REPORT_FILE)
 
 # Stage outputs for next run + artifact
 - task: PowerShell@2
@@ -132,8 +126,8 @@ steps:
     pwsh: true
     script: |
       New-Item -ItemType Directory -Force -Path output | Out-Null
-      Move-Item -Path "$(Build.SourcesDirectory)/DLchanges_Report.html" -Destination output/ -Force
-      Move-Item -Path "$(Build.SourcesDirectory)/prev/previousMembers.json" -Destination output/ -Force
+      Copy-Item -Path "$(Build.SourcesDirectory)/$env:DL_REPORT_FILE" -Destination output/ -Force
+      Copy-Item -Path "$(Build.SourcesDirectory)/prev/$env:DL_HISTORY_FILE" -Destination output/ -Force
 
 # Publish report + state so the next run can download it
 - publish: output

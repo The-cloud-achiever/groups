@@ -5,15 +5,16 @@ param (
     [string]$previous,
     [string]$report,
 
-    # --- Email params (from pipeline variables) ---
+    # Email
     [string]$mailFrom,
     [string]$mailTo,
     [string]$mailSubject = "Distribution List Membership Report",
-    [string]$smtpServer  = "smtp.office365.com",
-    [int]   $smtpPort    = 587
+
+    # Graph (tenant)
+    [string]$tenantId
 )
 
-# Helper: always return a string[] from any input shape (never $null)
+# ---------- Helpers ----------
 function AsStringArray {
     param($InputValue)
     $out = @()
@@ -21,11 +22,11 @@ function AsStringArray {
     foreach ($i in @($InputValue)) {
         if ($null -eq $i) { continue }
         if ($i -is [psobject]) {
-            if ($i.PSObject.Properties['User'])                 { $s = [string]$i.User }
-            elseif ($i.PSObject.Properties['PrimarySmtpAddress']){ $s = [string]$i.PrimarySmtpAddress }
-            elseif ($i.PSObject.Properties['Value'])            { $s = [string]$i.Value }
-            elseif ($i.PSObject.Properties['InputObject'])      { $s = [string]$i.InputObject }
-            else                                                { $s = [string]$i }
+            if     ($i.PSObject.Properties['User'])                 { $s = [string]$i.User }
+            elseif ($i.PSObject.Properties['PrimarySmtpAddress'])   { $s = [string]$i.PrimarySmtpAddress }
+            elseif ($i.PSObject.Properties['Value'])                { $s = [string]$i.Value }
+            elseif ($i.PSObject.Properties['InputObject'])          { $s = [string]$i.InputObject }
+            else                                                    { $s = [string]$i }
         } else {
             $s = [string]$i
         }
@@ -34,29 +35,31 @@ function AsStringArray {
     return $out
 }
 
+# ---------- Connect EXO ----------
 Write-Host "Connecting to Exchange Online..."
+Import-Module ExchangeOnlineManagement -ErrorAction Stop
 Connect-ExchangeOnline -AppId $appId -Organization $orgName -CertificateThumbprint $thumbprint
 
+# ---------- Gather current state ----------
 Write-Host "Fetching Distribution Lists..."
 $distributionLists = Get-DistributionGroup | Sort-Object DisplayName
 Write-Host "Total distribution lists: $($distributionLists.Count)"
 
-# Current snapshot: DisplayName -> string[] of member SMTPs
 $currentMembers = @{}
 foreach ($distributionList in $distributionLists) {
     $display = $distributionList.DisplayName
     if (-not $display) { continue }
     try {
-        $members = Get-DistributionGroupMember -Identity $distributionList.PrimarySmtpAddress `
-                 | Select-Object -ExpandProperty PrimarySmtpAddress
+        $members = Get-DistributionGroupMember -Identity $distributionList.PrimarySmtpAddress |
+                   Select-Object -ExpandProperty PrimarySmtpAddress
         $currentMembers[$display] = AsStringArray $members
     } catch {
-        Write-Warning "Unable to fetch members for $display : $_"
+        Write-Warning "Unable to fetch members for $display: $_"
         $currentMembers[$display] = @()
     }
 }
 
-# Previous snapshot
+# ---------- Load previous snapshot ----------
 $oldmembers = @{}
 if (Test-Path $previous) {
     Write-Host "Loading previous state from $previous"
@@ -74,7 +77,7 @@ if (Test-Path $previous) {
     Write-Host "No previous state found. Using empty baseline."
 }
 
-# New/Deleted/Common by NAME only
+# ---------- Compare by GROUP NAMES ----------
 $currentGroupNames = @($currentMembers.Keys)
 $oldGroupNames     = @($oldmembers.Keys)
 
@@ -101,17 +104,10 @@ foreach ($g in $deletedGroups) {
     }
 }
 
-# Common groups: safe Compare-Object
+# Common groups -> Compare-Object (safe)
 foreach ($g in $commonGroups) {
-    # Avoid inline-if-in-expression; assign first
-    $currSrc = @()
-    if ($currentMembers.ContainsKey($g)) { $currSrc = $currentMembers[$g] }
-    $oldSrc  = @()
-    if ($oldmembers.ContainsKey($g))     { $oldSrc  = $oldmembers[$g]     }
-
-    $curr = AsStringArray $currSrc
-    $old  = AsStringArray $oldSrc
-
+    $curr = AsStringArray $currentMembers[$g]
+    $old  = AsStringArray $oldmembers[$g]
     if ($null -eq $curr) { $curr = @() }
     if ($null -eq $old)  { $old  = @() }
 
@@ -126,7 +122,7 @@ foreach ($g in $commonGroups) {
     }
 }
 
-# All Groups table (current groups only, alphabetical)
+# All Groups for the report (current groups only)
 foreach ($g in ($currentGroupNames | Sort-Object)) {
     $allGroupsTable[$g] = @()
     foreach ($user in $currentMembers[$g]) {
@@ -193,69 +189,51 @@ foreach ($group in ($allGroupsTable.Keys | Sort-Object)) {
     }
     $html += "</table>"
 }
-
 $html += "</body></html>"
 
+# ---------- Save report + snapshot ----------
 Write-Host "Saving report to $report"
 $html | Out-File -Encoding utf8 $report
 
 Write-Host "Saving current DL state to $previous"
 $currentMembers | ConvertTo-Json -Depth 5 | Out-File $previous
 
-Disconnect-ExchangeOnline -Confirm:$false
-Write-Host "Done."
+# ---------- Email via Microsoft Graph (cert-based, no password) ----------
+# Fallback to env if not provided via param
+if (-not $tenantId) { $tenantId = $env:TENANT_ID }
 
-Write-Host "Saving report to $report"
-$html | Out-File -Encoding utf8 $report
-
-Write-Host "Saving current DL state to $previous"
-$currentMembers | ConvertTo-Json -Depth 5 | Out-File $previous
-
-# ------- Send email via Microsoft Graph (no password; cert-based app-only) -------
 try {
-    # Ensure Microsoft.Graph module is available in the agent; see YAML step below
     Import-Module Microsoft.Graph.Mail -ErrorAction Stop
-
-    # Connect app-only with cert
     Connect-MgGraph -TenantId $tenantId -ClientId $appId -CertificateThumbprint $thumbprint -NoWelcome
     Select-MgProfile -Name "v1.0"
 
     $bodyHtml = Get-Content $report -Raw
-    $bytes    = [System.IO.File]::ReadAllBytes($report)
-    $b64      = [System.Convert]::ToBase64String($bytes)
+    $bytes    = [IO.File]::ReadAllBytes($report)
+    $b64      = [Convert]::ToBase64String($bytes)
 
-    # Build the Graph message
     $message = @{
         subject = $mailSubject
-        body    = @{
-            contentType = "HTML"
-            content     = $bodyHtml
-        }
-        toRecipients = ($mailTo -split ",\s*") | ForEach-Object {
-            @{ emailAddress = @{ address = $_ } }
-        }
+        body    = @{ contentType = "HTML"; content = $bodyHtml }
+        toRecipients = ($mailTo -split ",\s*") | ForEach-Object { @{ emailAddress = @{ address = $_ } } }
         attachments = @(
             @{
                 '@odata.type' = '#microsoft.graph.fileAttachment'
-                name          = [System.IO.Path]::GetFileName($report)
+                name          = (Split-Path $report -Leaf)
                 contentType   = 'text/html'
                 contentBytes  = $b64
             }
         )
-        from = @{ emailAddress = @{ address = $mailFrom } } # helpful when sending as shared mailbox
+        from = @{ emailAddress = @{ address = $mailFrom } }
     }
 
-    # Send as the mailbox in $mailFrom (must be allowed by the Application Access Policy)
     Send-MgUserMail -UserId $mailFrom -Message $message -SaveToSentItems
-
     Write-Host "Graph email sent to $mailTo"
 }
 catch {
-    Write-Warning "Failed to send via Graph: $_"
+    Write-Warning "Failed to send via Graph: $($_.Exception.Message)"
 }
 finally {
     Disconnect-MgGraph -ErrorAction SilentlyContinue
+    Disconnect-ExchangeOnline -Confirm:$false
+    Write-Host "Done."
 }
-
-Disconnect-ExchangeOnline -Confirm:$false
-Write-Host "Done."
