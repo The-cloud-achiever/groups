@@ -35,7 +35,7 @@ steps:
 
 # Install ExchangeOnlineManagement + Graph submodules (no meta-module)
 - task: PowerShell@2
-  displayName: 'Install Modules (EXO + Graph Users.Actions)'
+  displayName: 'Get modules (no in-use warnings)'
   inputs:
     targetType: inline
     pwsh: true
@@ -46,19 +46,31 @@ steps:
         Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
       }
 
+      # Use a private folder for modules so we never update what's currently loaded
+      $modRoot = "$(Pipeline.Workspace)/psmods"
+      New-Item -ItemType Directory -Force -Path $modRoot | Out-Null
+      $env:PSModulePath = "$modRoot;$env:PSModulePath"
+
       $mods = @(
         @{ Name = 'ExchangeOnlineManagement';       Version = '3.5.0' },
         @{ Name = 'Microsoft.Graph.Authentication'; Version = '2.21.0' },
         @{ Name = 'Microsoft.Graph.Users.Actions';  Version = '2.21.0' }
       )
 
-      foreach ($m in $mods) {
-        $have = Get-Module -ListAvailable -Name $m.Name | Where-Object { $_.Version -eq [version]$m.Version }
+      function Ensure-Module {
+        param($Name, $Version)
+        $target = Join-Path $modRoot $Name
+        $have = Get-ChildItem -Path $target -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -eq $Version }
         if (-not $have) {
-          Install-Module -Name $m.Name -RequiredVersion $m.Version -Scope CurrentUser -Force -AllowClobber -AcceptLicense -ErrorAction Stop
+          # Download to private folder (does not try to update PackageManagement in-place)
+          Save-Module -Name $Name -RequiredVersion $Version -Path $modRoot -Force
         }
-        Import-Module -Name $m.Name -RequiredVersion $m.Version -Force
+        Import-Module -Name $Name -RequiredVersion $Version -Force
       }
+
+      foreach ($m in $mods) { Ensure-Module -Name $m.Name -Version $m.Version }
+
 
 
 # (Optional) list scripts
