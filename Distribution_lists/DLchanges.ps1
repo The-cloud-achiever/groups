@@ -3,7 +3,14 @@ param (
     [string]$orgName,
     [string]$thumbprint,
     [string]$previous,
-    [string]$report
+    [string]$report,
+
+    # --- Email params (from pipeline variables) ---
+    [string]$mailFrom,
+    [string]$mailTo,
+    [string]$mailSubject = "Distribution List Membership Report",
+    [string]$smtpServer  = "smtp.office365.com",
+    [int]   $smtpPort    = 587
 )
 
 # Helper: always return a string[] from any input shape (never $null)
@@ -194,6 +201,61 @@ $html | Out-File -Encoding utf8 $report
 
 Write-Host "Saving current DL state to $previous"
 $currentMembers | ConvertTo-Json -Depth 5 | Out-File $previous
+
+Disconnect-ExchangeOnline -Confirm:$false
+Write-Host "Done."
+
+Write-Host "Saving report to $report"
+$html | Out-File -Encoding utf8 $report
+
+Write-Host "Saving current DL state to $previous"
+$currentMembers | ConvertTo-Json -Depth 5 | Out-File $previous
+
+# ------- Send email via Microsoft Graph (no password; cert-based app-only) -------
+try {
+    # Ensure Microsoft.Graph module is available in the agent; see YAML step below
+    Import-Module Microsoft.Graph.Mail -ErrorAction Stop
+
+    # Connect app-only with cert
+    Connect-MgGraph -TenantId $tenantId -ClientId $appId -CertificateThumbprint $thumbprint -NoWelcome
+    Select-MgProfile -Name "v1.0"
+
+    $bodyHtml = Get-Content $report -Raw
+    $bytes    = [System.IO.File]::ReadAllBytes($report)
+    $b64      = [System.Convert]::ToBase64String($bytes)
+
+    # Build the Graph message
+    $message = @{
+        subject = $mailSubject
+        body    = @{
+            contentType = "HTML"
+            content     = $bodyHtml
+        }
+        toRecipients = ($mailTo -split ",\s*") | ForEach-Object {
+            @{ emailAddress = @{ address = $_ } }
+        }
+        attachments = @(
+            @{
+                '@odata.type' = '#microsoft.graph.fileAttachment'
+                name          = [System.IO.Path]::GetFileName($report)
+                contentType   = 'text/html'
+                contentBytes  = $b64
+            }
+        )
+        from = @{ emailAddress = @{ address = $mailFrom } } # helpful when sending as shared mailbox
+    }
+
+    # Send as the mailbox in $mailFrom (must be allowed by the Application Access Policy)
+    Send-MgUserMail -UserId $mailFrom -Message $message -SaveToSentItems
+
+    Write-Host "Graph email sent to $mailTo"
+}
+catch {
+    Write-Warning "Failed to send via Graph: $_"
+}
+finally {
+    Disconnect-MgGraph -ErrorAction SilentlyContinue
+}
 
 Disconnect-ExchangeOnline -Confirm:$false
 Write-Host "Done."

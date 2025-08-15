@@ -4,12 +4,12 @@ pool:
   vmImage: 'windows-latest'
 
 variables:
-- group: DL-Secrets  # only used for APP_ID, ORG_DOMAIN, PFX_PASSWORD
+- group: DL-Secrets   # APP_ID, TENANT_ID, ORG_DOMAIN, PFX_PASSWORD, MAIL_FROM, MAIL_TO, MAIL_SUBJECT
 
 steps:
 - checkout: self
 
-# ✅ Download previous report artifact from last successful run
+# Download previous snapshot & report from last successful run
 - task: DownloadPipelineArtifact@2
   displayName: Download Previous DL State
   continueOnError: true
@@ -21,35 +21,43 @@ steps:
     pipeline: 11
     runVersion: 'latest'
 
-# ✅ Download PFX certificate
+# Download the PFX used by your app (cert-based auth)
 - task: DownloadSecureFile@1
   name: fetchCert
+  displayName: Download PFX certificate
   inputs:
     secureFile: 'DLTrackingCert.pfx'
 
-# ✅ Install ExchangeOnline module
+# Install required PowerShell modules
 - task: PowerShell@2
-  displayName: Install ExchangeOnline Module
+  displayName: Install Modules (EXO + Microsoft Graph)
   inputs:
     targetType: inline
+    pwsh: true
     script: |
-      Install-Module ExchangeOnlineManagement -Force -Scope CurrentUser -AllowClobber
+      Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+      Install-Module ExchangeOnlineManagement -Scope CurrentUser -Force -AllowClobber
+      Install-Module Microsoft.Graph -Scope CurrentUser -Force
+      Import-Module ExchangeOnlineManagement
+      Import-Module Microsoft.Graph
 
-# ✅ Debug script path (optional)
+# (Optional) list scripts for debugging
 - task: PowerShell@2
   displayName: Debug - List all .ps1 files
   inputs:
     targetType: inline
+    pwsh: true
     script: |
       Get-ChildItem -Path "$(Build.SourcesDirectory)" -Recurse -Filter *.ps1
 
-# ✅ Run the main script
+# Run the main script (build report + email via Graph app-only)
 - task: PowerShell@2
   displayName: Run DL Tracking Script
   inputs:
     targetType: inline
+    pwsh: true
     script: |
-      # Import certificate
+      # Import certificate to CurrentUser\My so EXO/Graph can find it by thumbprint
       $certPath = "$(fetchCert.secureFilePath)"
       $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
       $cert.Import($certPath, "$(PFX_PASSWORD)", "PersistKeySet")
@@ -59,34 +67,40 @@ steps:
       $store.Close()
       $thumbprint = $cert.Thumbprint
 
-      # Define file paths directly (no variables)
-      $prevFile = "$(Build.SourcesDirectory)/prev/previousMembers.json"
+      # Paths
+      $prevFile   = "$(Build.SourcesDirectory)/prev/previousMembers.json"
       $reportFile = "$(Build.SourcesDirectory)/DLchanges_Report.html"
 
-      # Create baseline if missing
+      # Ensure baseline exists
       if (-not (Test-Path $prevFile)) {
         '{}' | Out-File $prevFile -Encoding utf8
         Write-Host "No previous state found — initialized empty JSON at $prevFile"
       }
 
+      # Run script (your script must include the Graph email block & params)
       & "$(Build.SourcesDirectory)/Distribution_lists/DLchanges.ps1" `
         -appId "$(APP_ID)" `
+        -tenantId "$(TENANT_ID)" `
         -orgName "$(ORG_DOMAIN)" `
         -thumbprint $thumbprint `
         -previous $prevFile `
-        -report $reportFile
+        -report $reportFile `
+        -mailFrom "$(MAIL_FROM)" `
+        -mailTo "$(MAIL_TO)" `
+        -mailSubject "$(MAIL_SUBJECT)"
 
-# ✅ Move files for publishing
+# Collect outputs for publishing
 - task: PowerShell@2
   displayName: Move output files to folder
   inputs:
     targetType: inline
+    pwsh: true
     script: |
-      mkdir output
-      Move-Item "$(Build.SourcesDirectory)/DLchanges_Report.html" output/ -Force
-      Move-Item "$(Build.SourcesDirectory)/prev/previousMembers.json" output/ -Force
+      New-Item -ItemType Directory -Force -Path output | Out-Null
+      Move-Item -Path "$(Build.SourcesDirectory)/DLchanges_Report.html" -Destination output/ -Force
+      Move-Item -Path "$(Build.SourcesDirectory)/prev/previousMembers.json" -Destination output/ -Force
 
-# ✅ Publish output folder as artifact
+# Publish report + state so next run can download it
 - publish: output
   artifact: DLReport
   displayName: Publish Report + State Files
