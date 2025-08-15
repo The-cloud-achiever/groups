@@ -97,6 +97,7 @@ steps:
       Write-Host "Report file: $reportFile"
       Write-Host "History file: $prevFile"
       Write-Host "MAIL_FROM: $($env:MAIL_FROM)"
+      Write-Host "MAIL_TO: $($env:MAIL_TO)"
       Write-Host "MAIL_TO length: $([string]::IsNullOrWhiteSpace($env:MAIL_TO) ? 0 : $env:MAIL_TO.Length)"
 
 
