@@ -202,9 +202,33 @@ $currentMembers | ConvertTo-Json -Depth 5 | Out-File $previous
 # Fallback to env if not provided via param
 if (-not $tenantId) { $tenantId = $env:TENANT_ID }
 
+function NormalizeAddresses {
+    param([string]$raw)
+    if ([string]::IsNullOrWhiteSpace($raw)) { return @() }
+    $parts = $raw -split '[,;]' | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+    $emails = @()
+    foreach ($p in $parts) {
+        # handle "Display Name <user@domain>" or just "user@domain"
+        if ($p -match '<([^>]+)>') { $addr = $matches[1].Trim() } else { $addr = $p }
+        # very light validation
+        if ($addr -match '^[^\s@]+@[^\s@]+\.[^\s@]+$') { $emails += $addr }
+    }
+    return $emails
+}
+
 try {
     Import-Module Microsoft.Graph.Users.Actions -ErrorAction Stop
     Connect-MgGraph -TenantId $tenantId -ClientId $appId -CertificateThumbprint $thumbprint -NoWelcome
+
+    $fromAddr = (NormalizeAddresses $mailFrom) | Select-Object -First 1
+    $toAddrs  = NormalizeAddresses $mailTo
+
+    if (-not $fromAddr) { throw "MAIL_FROM is empty or invalid." }
+    if (-not $toAddrs -or $toAddrs.Count -eq 0) { throw "MAIL_TO is empty or invalid after normalization." }
+
+    # (Optional) brief log to help debug (no full emails printed)
+    Write-Host "Email from: $($fromAddr)"
+    Write-Host "Email to count: $($toAddrs.Count)"
 
     $bodyHtml = Get-Content $report -Raw
     $bytes    = [IO.File]::ReadAllBytes($report)
@@ -213,7 +237,7 @@ try {
     $message = @{
         subject = $mailSubject
         body    = @{ contentType = "HTML"; content = $bodyHtml }
-        toRecipients = ($mailTo -split ",\s*") | ForEach-Object { @{ emailAddress = @{ address = $_ } } }
+        toRecipients = $toAddrs | ForEach-Object { @{ emailAddress = @{ address = $_ } } }
         attachments = @(
             @{
                 '@odata.type' = '#microsoft.graph.fileAttachment'
@@ -222,11 +246,11 @@ try {
                 contentBytes  = $b64
             }
         )
-        from = @{ emailAddress = @{ address = $mailFrom } }
+        from = @{ emailAddress = @{ address = $fromAddr } }
     }
 
-    Send-MgUserMail -UserId $mailFrom -Message $message -SaveToSentItems
-    Write-Host "Graph email sent to $mailTo"
+    Send-MgUserMail -UserId $fromAddr -Message $message -SaveToSentItems
+    Write-Host "Graph email sent to $($toAddrs -join ', ')"
 }
 catch {
     Write-Warning "Failed to send via Graph: $($_.Exception.Message)"

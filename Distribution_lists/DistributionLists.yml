@@ -96,6 +96,9 @@ steps:
       Write-Host "Using TenantId: $($env:TENANT_ID)"
       Write-Host "Report file: $reportFile"
       Write-Host "History file: $prevFile"
+      Write-Host "MAIL_FROM: $($env:MAIL_FROM)"
+      Write-Host "MAIL_TO length: $([string]::IsNullOrWhiteSpace($env:MAIL_TO) ? 0 : $env:MAIL_TO.Length)"
+
 
       & "$(Build.SourcesDirectory)/Distribution_lists/DLchanges.ps1" `
         -appId      $env:APP_ID `
