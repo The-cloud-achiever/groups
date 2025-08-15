@@ -205,7 +205,6 @@ if (-not $tenantId) { $tenantId = $env:TENANT_ID }
 try {
     Import-Module Microsoft.Graph.Mail -ErrorAction Stop
     Connect-MgGraph -TenantId $tenantId -ClientId $appId -CertificateThumbprint $thumbprint -NoWelcome
-    Select-MgProfile -Name "v1.0"
 
     $bodyHtml = Get-Content $report -Raw
     $bytes    = [IO.File]::ReadAllBytes($report)
