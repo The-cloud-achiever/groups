@@ -7,7 +7,7 @@ param (
 )
 
 # Helper: always return a string[] from any input shape
-function As-StringArray {
+function AsStringArray {
     param($InputValue)
     $out = @()
     if ($null -eq $InputValue) { return @() }
@@ -90,8 +90,8 @@ foreach ($g in $deletedGroups) {
 
 # Common groups: compare members; ensure we only use plain strings to avoid SideIndicator artifacts
 foreach ($g in $commonGroups) {
-    $curr = As-StringArray $currentMembers[$g]
-    $old  = As-StringArray $oldmembers[$g]
+    $curr = AsStringArray $currentMembers[$g]
+    $old  = AsStringArray $oldmembers[$g]
 
     # Use Compare-Object but expand InputObject explicitly so SideIndicator never appears in output
     $diff    = Compare-Object -ReferenceObject $old -DifferenceObject $curr
