@@ -203,7 +203,7 @@ $currentMembers | ConvertTo-Json -Depth 5 | Out-File $previous
 if (-not $tenantId) { $tenantId = $env:TENANT_ID }
 
 try {
-    Import-Module Microsoft.Graph.Mail -ErrorAction Stop
+    Import-Module Microsoft.Graph.Users.Actions -ErrorAction Stop
     Connect-MgGraph -TenantId $tenantId -ClientId $appId -CertificateThumbprint $thumbprint -NoWelcome
 
     $bodyHtml = Get-Content $report -Raw

@@ -35,7 +35,7 @@ steps:
 
 # Install ExchangeOnlineManagement + Graph submodules (no meta-module)
 - task: PowerShell@2
-  displayName: Install Modules (EXO + Graph)
+  displayName: 'Install Modules (EXO + Graph Users.Actions)'
   inputs:
     targetType: inline
     pwsh: true
@@ -47,9 +47,9 @@ steps:
       }
 
       $mods = @(
-        @{ Name = 'ExchangeOnlineManagement';       Version = '$(EOMVersion)' },
-        @{ Name = 'Microsoft.Graph.Authentication'; Version = '$(MGVersion)'  },
-        @{ Name = 'Microsoft.Graph.Mail';           Version = '$(MGVersion)'  }
+        @{ Name = 'ExchangeOnlineManagement';       Version = '3.5.0' },
+        @{ Name = 'Microsoft.Graph.Authentication'; Version = '2.21.0' },
+        @{ Name = 'Microsoft.Graph.Users.Actions';  Version = '2.21.0' }
       )
 
       foreach ($m in $mods) {
@@ -59,6 +59,7 @@ steps:
         }
         Import-Module -Name $m.Name -RequiredVersion $m.Version -Force
       }
+
 
 # (Optional) list scripts
 - task: PowerShell@2
