@@ -99,7 +99,11 @@ foreach ($g in $commonGroups) {
 $allGroupsByName = @($currentGroupNames + $deletedGroups | Sort-Object -Unique)  # include deleted so they show once with Removed entries
 foreach ($g in $allGroupsByName) {
     $allGroupsTable[$g] = @()
-    $listToShow = $currentMembers.ContainsKey($g) ? $currentMembers[$g] : @()  # if deleted, show nothing under All Groups (optional)
+    if ($currentMembers.ContainsKey($g)) {
+        $listToShow = $currentMembers[$g]
+    } else {
+        $listToShow = @()
+    }
     foreach ($user in $listToShow) {
         $status = 'Unchanged'
         if ($groupsWithChanges.ContainsKey($g)) {
