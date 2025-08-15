@@ -11,6 +11,7 @@ Connect-ExchangeOnline -AppId $appId -Organization $orgName -CertificateThumbpri
 
 Write-Host "Fetching Distribution Lists..."
 $distributionLists = Get-DistributionGroup | Sort-Object DisplayName
+Write-Host "Total distribution lists: $($distributionLists.Count)"
 
 $currentMembers = @{}
 foreach ($distributionList in $distributionLists) {
