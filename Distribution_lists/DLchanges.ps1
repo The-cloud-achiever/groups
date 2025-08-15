@@ -200,6 +200,7 @@ $currentMembers | ConvertTo-Json -Depth 5 | Out-File $previous
 
 # ---------- Email via Microsoft Graph (cert-based, no password) ----------
 # Fallback to env if not provided via param
+# ---------- Email via Microsoft Graph (cert-based, no password) ----------
 if (-not $tenantId) { $tenantId = $env:TENANT_ID }
 
 function NormalizeAddresses {
@@ -208,50 +209,64 @@ function NormalizeAddresses {
     $parts = $raw -split '[,;]' | ForEach-Object { $_.Trim() } | Where-Object { $_ }
     $emails = @()
     foreach ($p in $parts) {
-        # handle "Display Name <user@domain>" or just "user@domain"
-        if ($p -match '<([^>]+)>') { $addr = $matches[1].Trim() } else { $addr = $p }
-        # very light validation
+        if ($p -match '<([^>]+)>') {
+            $addr = $matches[1].Trim()
+        } else {
+            $addr = $p
+        }
         if ($addr -match '^[^\s@]+@[^\s@]+\.[^\s@]+$') { $emails += $addr }
     }
     return $emails
 }
 
 try {
-    Import-Module Microsoft.Graph.Users.Actions -ErrorAction Stop
+    Import-Module Microsoft.Graph.Authentication -ErrorAction Stop
     Connect-MgGraph -TenantId $tenantId -ClientId $appId -CertificateThumbprint $thumbprint -NoWelcome
 
     $fromAddr = (NormalizeAddresses $mailFrom) | Select-Object -First 1
     $toAddrs  = NormalizeAddresses $mailTo
 
-    if (-not $fromAddr) { throw "MAIL_FROM is empty or invalid." }
-    if (-not $toAddrs -or $toAddrs.Count -eq 0) { throw "MAIL_TO is empty or invalid after normalization." }
-
-    # (Optional) brief log to help debug (no full emails printed)
-    Write-Host "Email from: $($fromAddr)"
-    Write-Host "Email TO: $($toAddrs)"
+    Write-Host "Email from: $fromAddr"
+    Write-Host "Email TO: $($toAddrs -join ', ')"
     Write-Host "Email to count: $($toAddrs.Count)"
 
-    $bodyHtml = Get-Content $report -Raw
-    $bytes    = [IO.File]::ReadAllBytes($report)
-    $b64      = [Convert]::ToBase64String($bytes)
+    if (-not $fromAddr) { throw "MAIL_FROM is empty or invalid." }
+    if ($toAddrs.Count -lt 1) { throw "MAIL_TO is empty or invalid after normalization." }
 
-    $message = @{
+    $bodyHtml = Get-Content $report -Raw
+    $b64      = [Convert]::ToBase64String([IO.File]::ReadAllBytes($report))
+
+    # Build raw JSON for Graph; this avoids typed model conversion issues
+    $payload = @{
+      message = @{
         subject = $mailSubject
-        body    = @{ contentType = "HTML"; content = $bodyHtml }
+        body    = @{ contentType = 'HTML'; content = $bodyHtml }
         toRecipients = $toAddrs | ForEach-Object { @{ emailAddress = @{ address = $_ } } }
         attachments = @(
-            @{
-                '@odata.type' = '#microsoft.graph.fileAttachment'
-                name          = (Split-Path $report -Leaf)
-                contentType   = 'text/html'
-                contentBytes  = $b64
-            }
+          @{
+            '@odata.type' = '#microsoft.graph.fileAttachment'
+            name          = (Split-Path $report -Leaf)
+            contentType   = 'text/html'
+            contentBytes  = $b64
+          }
         )
-        from = @{ emailAddress = @{ address = $fromAddr } }
+      }
+      saveToSentItems = $true
     }
 
-    Send-MgUserMail -UserId $fromAddr -Message $message -SaveToSentItems
-    Write-Host "Graph email sent to $($toAddrs -join ', ')"
+    # Prefer Invoke-MgGraphRequest; fall back to Invoke-RestMethod with the SDK token
+    $json = $payload | ConvertTo-Json -Depth 10
+    try {
+        Invoke-MgGraphRequest -Method POST -Uri "https://graph.microsoft.com/v1.0/users/$fromAddr/sendMail" `
+          -ContentType 'application/json' -Body $json -ErrorAction Stop
+    } catch {
+        $token = (Get-MgContext).AccessToken
+        Invoke-RestMethod -Method POST -Uri "https://graph.microsoft.com/v1.0/users/$fromAddr/sendMail" `
+          -Headers @{ Authorization = "Bearer $token" } `
+          -ContentType 'application/json' -Body $json -ErrorAction Stop
+    }
+
+    Write-Host "Graph email sent to: $($toAddrs -join ', ')"
 }
 catch {
     Write-Warning "Failed to send via Graph: $($_.Exception.Message)"
