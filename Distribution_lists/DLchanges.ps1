@@ -40,7 +40,7 @@ foreach ($distributionList in $distributionLists) {
     try {
         $members = Get-DistributionGroupMember -Identity $distributionList.PrimarySmtpAddress |
                    Select-Object -ExpandProperty PrimarySmtpAddress
-        $currentMembers[$distributionList.DisplayName] = As-StringArray $members
+        $currentMembers[$distributionList.DisplayName] = AsStringArray $members
     } catch {
         Write-Warning "Unable to fetch members for $($distributionList.DisplayName): $_"
         $currentMembers[$distributionList.DisplayName] = @()
@@ -54,7 +54,7 @@ if (Test-Path $previous) {
     $json = Get-Content $previous -Raw
     $converted = $json | ConvertFrom-Json
     foreach ($entry in $converted.PSObject.Properties) {
-        $oldmembers[$entry.Name] = As-StringArray $entry.Value
+        $oldmembers[$entry.Name] = AsStringArray $entry.Value
     }
     Write-Host "Loaded $($oldmembers.Keys.Count) groups from previous state."
 } else {
