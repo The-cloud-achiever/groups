@@ -44,7 +44,7 @@ foreach ($distributionList in $distributionLists) {
                  | Select-Object -ExpandProperty PrimarySmtpAddress
         $currentMembers[$display] = AsStringArray $members
     } catch {
-        Write-Warning "Unable to fetch members for $display: $_"
+        Write-Warning "Unable to fetch members for $display : $_"
         $currentMembers[$display] = @()
     }
 }
