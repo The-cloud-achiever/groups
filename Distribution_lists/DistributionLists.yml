@@ -84,27 +84,28 @@ steps:
     targetType: inline
     pwsh: true
     script: |
-      # Import certificate to CurrentUser\My so EXO/Graph can find it by thumbprint
-      $certPath = "$(fetchCert.secureFilePath)"
-      $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
-      $cert.Import($certPath, "$(PFX_PASSWORD)", "PersistKeySet")
-      $store = New-Object System.Security.Cryptography.X509Certificates.X509Store "My", "CurrentUser"
-      $store.Open("ReadWrite")
-      $store.Add($cert)
-      $store.Close()
-      $thumbprint = $cert.Thumbprint
+      # Import PFX to CurrentUser\My (works in pwsh 7 on hosted agents)
+      $pfxPath = "$(fetchCert.secureFilePath)"
+      $pfxPass = ConvertTo-SecureString "$(PFX_PASSWORD)" -AsPlainText -Force
+
+      $imported = Import-PfxCertificate `
+        -FilePath $pfxPath `
+        -Password $pfxPass `
+        -CertStoreLocation Cert:\CurrentUser\My
+
+      $thumbprint = $imported.Thumbprint
+      Write-Host "Imported cert thumbprint: $thumbprint"
 
       # Paths
       $prevFile   = "$(Build.SourcesDirectory)/prev/previousMembers.json"
       $reportFile = "$(Build.SourcesDirectory)/DLchanges_Report.html"
 
-      # Ensure baseline exists
       if (-not (Test-Path $prevFile)) {
         '{}' | Out-File $prevFile -Encoding utf8
         Write-Host "No previous state found — initialized empty JSON at $prevFile"
       }
 
-      # Run script (script includes Graph email sending)
+      # Run your script (Graph app-only email, EXO connection etc.)
       & "$(Build.SourcesDirectory)/Distribution_lists/DLchanges.ps1" `
         -appId "$(APP_ID)" `
         -tenantId "$(TENANT_ID)" `
@@ -115,6 +116,7 @@ steps:
         -mailFrom "$(MAIL_FROM)" `
         -mailTo "$(MAIL_TO)" `
         -mailSubject "$(MAIL_SUBJECT)"
+
 
 # Stage outputs for next run + artifact
 - task: PowerShell@2
