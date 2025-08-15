@@ -228,6 +228,7 @@ try {
 
     # (Optional) brief log to help debug (no full emails printed)
     Write-Host "Email from: $($fromAddr)"
+    Write-Host "Email TO: $($toAddrs)"
     Write-Host "Email to count: $($toAddrs.Count)"
 
     $bodyHtml = Get-Content $report -Raw
