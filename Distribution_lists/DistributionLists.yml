@@ -41,7 +41,12 @@ steps:
     pwsh: true
     script: |
       $ProgressPreference = 'SilentlyContinue'
+
+      # Make PSGallery trusted + ensure NuGet provider exists
       Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+      if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
+        Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
+      }
 
       $mods = @(
         @{ Name = 'ExchangeOnlineManagement';       Version = '$(EOMVersion)' },
@@ -50,12 +55,18 @@ steps:
       )
 
       foreach ($m in $mods) {
-        if (-not (Get-Module -ListAvailable -Name $m.Name -RequiredVersion $m.Version)) {
+        # Check if the exact version is available locally
+        $have = Get-Module -ListAvailable -Name $m.Name |
+                Where-Object { $_.Version -eq [version]$m.Version }
+
+        if (-not $have) {
           Install-Module -Name $m.Name -RequiredVersion $m.Version `
             -Scope CurrentUser -Force -AllowClobber -AcceptLicense -ErrorAction Stop
         }
-        Import-Module $m.Name -RequiredVersion $m.Version -Force
+
+        Import-Module -Name $m.Name -RequiredVersion $m.Version -Force
       }
+
 
 # (Optional) list scripts for quick sanity check
 - task: PowerShell@2
