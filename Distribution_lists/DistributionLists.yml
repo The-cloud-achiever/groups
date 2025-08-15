@@ -84,19 +84,15 @@ steps:
     targetType: inline
     pwsh: true
     script: |
-      # Import PFX to CurrentUser\My (works in pwsh 7 on hosted agents)
-      $pfxPath = "$(fetchCert.secureFilePath)"
-      $pfxPass = ConvertTo-SecureString "$(PFX_PASSWORD)" -AsPlainText -Force
+      # Import PFX to CurrentUser\My
+      $pfxPath = "$env:PFX_PATH"
+      if (-not $pfxPath) { $pfxPath = "$(fetchCert.secureFilePath)" }  # fallback if you didn't pass PFX_PATH
+      $pfxPass = ConvertTo-SecureString $env:PFX_PASSWORD -AsPlainText -Force
 
-      $imported = Import-PfxCertificate `
-        -FilePath $pfxPath `
-        -Password $pfxPass `
-        -CertStoreLocation Cert:\CurrentUser\My
-
+      $imported = Import-PfxCertificate -FilePath $pfxPath -Password $pfxPass -CertStoreLocation Cert:\CurrentUser\My
       $thumbprint = $imported.Thumbprint
       Write-Host "Imported cert thumbprint: $thumbprint"
 
-      # Paths
       $prevFile   = "$(Build.SourcesDirectory)/prev/previousMembers.json"
       $reportFile = "$(Build.SourcesDirectory)/DLchanges_Report.html"
 
@@ -105,17 +101,27 @@ steps:
         Write-Host "No previous state found — initialized empty JSON at $prevFile"
       }
 
-      # Run your script (Graph app-only email, EXO connection etc.)
+      # Use env vars (no $() expansion issues)
       & "$(Build.SourcesDirectory)/Distribution_lists/DLchanges.ps1" `
-        -appId "$(APP_ID)" `
-        -tenantId "$(TENANT_ID)" `
-        -orgName "$(ORG_DOMAIN)" `
+        -appId     $env:APP_ID `
+        -tenantId  $env:TENANT_ID `
+        -orgName   $env:ORG_DOMAIN `
         -thumbprint $thumbprint `
-        -previous $prevFile `
-        -report $reportFile `
-        -mailFrom "$(MAIL_FROM)" `
-        -mailTo "$(MAIL_TO)" `
-        -mailSubject "$(MAIL_SUBJECT)"
+        -previous  $prevFile `
+        -report    $reportFile `
+        -mailFrom  $env:MAIL_FROM `
+        -mailTo    $env:MAIL_TO `
+        -mailSubject $env:MAIL_SUBJECT
+  env:
+    # bind pipeline/group vars to env for the script
+    APP_ID: $(APP_ID)
+    TENANT_ID: $(TENANT_ID)
+    ORG_DOMAIN: $(ORG_DOMAIN)
+    PFX_PASSWORD: $(PFX_PASSWORD)
+    MAIL_FROM: $(MAIL_FROM)
+    MAIL_TO: $(MAIL_TO)
+    MAIL_SUBJECT: $(MAIL_SUBJECT)
+
 
 
 # Stage outputs for next run + artifact
