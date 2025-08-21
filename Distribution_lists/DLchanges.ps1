@@ -241,7 +241,7 @@ IT Team, IK Partners
         Write-Warning "Failed to send email: $_"
     }
 
-    Write-Host $env:MAIL_TO , $env:MAIL_FROM
+    Write-Host "my env $env:MAIL_TO , $env:MAIL_FROM"
 }
 
 
