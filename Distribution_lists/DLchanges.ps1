@@ -206,6 +206,15 @@ Best regards,<br>
 IT Team, IK Partners
 "@
 
+    if ([string]::IsNullOrWhiteSpace($from)) {
+        Write-Warning "MAIL_FROM is empty or not set. Cannot send email."
+        return
+    }
+    if ([string]::IsNullOrWhiteSpace($to)) {
+        Write-Warning "MAIL_TO is empty or not set. Cannot send email."
+        return
+    }
+
     # Prepare attachment
     $attachment = @{
         '@odata.type' = "#microsoft.graph.fileAttachment"
