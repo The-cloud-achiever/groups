@@ -251,7 +251,7 @@ $html | Out-File -Encoding utf8 $report
 Write-Host "Saving current DL state to $previous"
 $currentMembers | ConvertTo-Json -Depth 5 | Out-File $previous
 
-Write-Host "Sending Report as email attachement to $EMAIL_TO"
+Write-Host "Sending Report as email attachement to $env:EMAIL_TO"
 send_email
 
 
