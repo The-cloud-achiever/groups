@@ -4,8 +4,8 @@ param (
     [string]$thumbprint,
     [string]$previous,
     [string]$report,
-    [string]$MAIL_FROM,
-    [string]$MAIL_T0
+    [string]$MAIL_FROM = $env:MAIL_FROM,
+    [string]$MAIL_T0 = $env:MAIL_TO
 )
 
 # Helper: always return a string[] from any input shape (never $null)
