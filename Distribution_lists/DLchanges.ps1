@@ -240,6 +240,8 @@ IT Team, IK Partners
     } catch {
         Write-Warning "Failed to send email: $_"
     }
+
+    Write-Host $env:MAIL_TO , $env:MAIL_FROM
 }
 
 
