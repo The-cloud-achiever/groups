@@ -4,12 +4,7 @@ pool:
   vmImage: 'windows-latest'
 
 variables:
-- group: DL-Secrets   # APP_ID, TENANT_ID, ORG_DOMAIN, PFX_password, MAIL_FROM, MAIL_TO, MAIL_SUBJECT, DL_HISTORY_FILE, DL_REPORT_FILE
-# Pin (optional)
-- name: EOMVersion
-  value: '3.5.0'
-- name: MGVersion
-  value: '2.21.0'
+- group: DL-Secrets
 
 steps:
 - checkout: self
@@ -34,55 +29,22 @@ steps:
     secureFile: 'DLTrackingCert.pfx'
 
 # Install ExchangeOnlineManagement + Graph submodules (no meta-module)
+# 1) Install modules only (do NOT Import-Module here)
 - task: PowerShell@2
-  displayName: 'Get modules (no in-use warnings)'
+  displayName: 'Install modules (no imports)'
   inputs:
     targetType: inline
     pwsh: true
     script: |
-      $ProgressPreference = 'SilentlyContinue'
       Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
       if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
         Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
       }
 
-      # Use a private folder for modules so we never update what's currently loaded
-      $modRoot = "$(Pipeline.Workspace)/psmods"
-      New-Item -ItemType Directory -Force -Path $modRoot | Out-Null
-      $env:PSModulePath = "$modRoot;$env:PSModulePath"
+      Install-Module ExchangeOnlineManagement -Scope CurrentUser -Force -AllowClobber -RequiredVersion 3.5.0 -AcceptLicense
+      Install-Module Microsoft.Graph.Authentication -Scope CurrentUser -Force -AllowClobber -RequiredVersion 2.21.0 -AcceptLicense
+      Install-Module Microsoft.Graph.Users.Actions  -Scope CurrentUser -Force -AllowClobber -RequiredVersion 2.21.0 -AcceptLicense
 
-      $mods = @(
-        @{ Name = 'ExchangeOnlineManagement';       Version = '3.5.0' },
-        @{ Name = 'Microsoft.Graph.Authentication'; Version = '2.21.0' },
-        @{ Name = 'Microsoft.Graph.Users.Actions';  Version = '2.21.0' }
-      )
-
-      function Ensure-Module {
-        param($Name, $Version)
-        $target = Join-Path $modRoot $Name
-        $have = Get-ChildItem -Path $target -ErrorAction SilentlyContinue |
-                Where-Object { $_.Name -eq $Version }
-        if (-not $have) {
-          # Download to private folder (does not try to update PackageManagement in-place)
-          Save-Module -Name $Name -RequiredVersion $Version -Path $modRoot -Force
-        }
-        Import-Module -Name $Name -RequiredVersion $Version -Force
-      }
-
-      foreach ($m in $mods) { Ensure-Module -Name $m.Name -Version $m.Version }
-
-
-
-# (Optional) list scripts
-- task: PowerShell@2
-  displayName: Debug - List all .ps1 files
-  inputs:
-    targetType: inline
-    pwsh: true
-    script: |
-      Get-ChildItem -Path "$(Build.SourcesDirectory)" -Recurse -Filter *.ps1
-
-# Run your script (build report + email via Graph app-only)
 - task: PowerShell@2
   displayName: Run DL Tracking Script
   inputs:
@@ -93,7 +55,6 @@ steps:
       $pfxPass   = ConvertTo-SecureString $env:PFX_PASSWORD -AsPlainText -Force
       $imported  = Import-PfxCertificate -FilePath "$(fetchCert.secureFilePath)" -Password $pfxPass -CertStoreLocation Cert:\CurrentUser\My
       $thumbprint = $imported.Thumbprint
-      Write-Host "Imported cert thumbprint: $thumbprint"
 
       # Paths from variable group
       $prevFile   = Join-Path "$(Build.SourcesDirectory)/prev" $env:DL_HISTORY_FILE
@@ -128,7 +89,7 @@ steps:
     APP_ID: $(APP_ID)
     TENANT_ID: $(TENANT_ID)
     ORG_DOMAIN: $(ORG_DOMAIN)
-    PFX_PASSWORD: $(PFX_password)   # note: lowercase p in the variable group
+    PFX_PASSWORD: $(PFX_password)
     MAIL_FROM: $(MAIL_FROM)
     MAIL_TO: $(MAIL_TO)
     MAIL_SUBJECT: $(MAIL_SUBJECT)
