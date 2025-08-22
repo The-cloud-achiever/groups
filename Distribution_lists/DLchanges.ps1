@@ -103,9 +103,26 @@ foreach ($g in $deletedGroups) {
 }
 
 # Common groups: safe Compare-Object
+# Common groups: null-safe Compare-Object
 foreach ($g in $commonGroups) {
-    $curr = AsStringArray ($currentMembers[$g])
-    $old  = AsStringArray ($oldmembers[$g])
+
+    # fetch raw values if present
+    $currSrc = $null
+    if ($currentMembers.ContainsKey($g)) { $currSrc = $currentMembers[$g] }
+
+    $oldSrc  = $null
+    if ($oldmembers.ContainsKey($g))     { $oldSrc  = $oldmembers[$g] }
+
+    # normalize to string[]
+    $curr = AsStringArray $currSrc
+    $old  = AsStringArray $oldSrc
+
+    # harden against $null (AsStringArray *should* return @(), but be explicit)
+    if ($null -eq $curr) { $curr = @() }
+    if ($null -eq $old)  { $old  = @() }
+
+    # nothing to compare? next group
+    if ($curr.Count -eq 0 -and $old.Count -eq 0) { continue }
 
     $diff    = Compare-Object -ReferenceObject $old -DifferenceObject $curr
     $added   = @($diff | Where-Object SideIndicator -eq '=>' | Select-Object -ExpandProperty InputObject | ForEach-Object { ([string]$_).Trim() })
@@ -117,6 +134,7 @@ foreach ($g in $commonGroups) {
         foreach ($u in $removed) { if ($u) { $groupsWithChanges[$g] += @{ Type = 'Removed'; User = $u } } }
     }
 }
+
 
 # All Groups table (current groups only, alphabetical)
 foreach ($g in ($currentGroupNames | Sort-Object)) {
