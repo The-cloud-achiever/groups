@@ -262,6 +262,7 @@ function Send-ReportEmail {
 Write-Host "Sending report email to $MailTo"
 Send-ReportEmail -From $MailFrom -To $MailTo -Subject $MailSubject -AttachmentPath $Report
 
+
 Disconnect-ExchangeOnline -Confirm:$false
 Disconnect-MgGraph
 Write-Host "Done."
