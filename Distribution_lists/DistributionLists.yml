@@ -28,10 +28,9 @@ steps:
   inputs:
     secureFile: 'DLTrackingCert.pfx'
 
-# Install ExchangeOnlineManagement + Graph submodules (no meta-module)
-# 1) Install modules only (do NOT Import-Module here)
+# Install ExchangeOnline + Graph modules (install only)
 - task: PowerShell@2
-  displayName: 'Install modules (no imports)'
+  displayName: Install modules
   inputs:
     targetType: inline
     pwsh: true
@@ -40,11 +39,11 @@ steps:
       if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
         Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
       }
-
       Install-Module ExchangeOnlineManagement -Scope CurrentUser -Force -AllowClobber -RequiredVersion 3.5.0 -AcceptLicense
       Install-Module Microsoft.Graph.Authentication -Scope CurrentUser -Force -AllowClobber -RequiredVersion 2.21.0 -AcceptLicense
       Install-Module Microsoft.Graph.Users.Actions  -Scope CurrentUser -Force -AllowClobber -RequiredVersion 2.21.0 -AcceptLicense
 
+# Run DL Tracking Script
 - task: PowerShell@2
   displayName: Run DL Tracking Script
   inputs:
@@ -52,40 +51,40 @@ steps:
     pwsh: true
     script: |
       # Import PFX to CurrentUser\My
-      $pfxPass   = ConvertTo-SecureString $env:PFX_PASSWORD -AsPlainText -Force
-      $imported  = Import-PfxCertificate -FilePath "$(fetchCert.secureFilePath)" -Password $pfxPass -CertStoreLocation Cert:\CurrentUser\My
+      $pfxPass    = ConvertTo-SecureString $env:PFX_PASSWORD -AsPlainText -Force
+      $imported   = Import-PfxCertificate -FilePath "$(fetchCert.secureFilePath)" -Password $pfxPass -CertStoreLocation Cert:\CurrentUser\My
       $thumbprint = $imported.Thumbprint
 
-      # Paths from variable group
-      $prevFile   = Join-Path "$(Build.SourcesDirectory)/prev" $env:DL_HISTORY_FILE
-      $reportFile = Join-Path "$(Build.SourcesDirectory)"       $env:DL_REPORT_FILE
+      # Resolve paths from variable group
+      $prevDir    = Join-Path "$(Build.SourcesDirectory)" "prev"
+      New-Item -ItemType Directory -Force -Path $prevDir | Out-Null
+
+      $prevFile   = Join-Path $prevDir $env:DL_HISTORY_FILE
+      $reportFile = Join-Path "$(Build.SourcesDirectory)" $env:DL_REPORT_FILE
 
       if (-not (Test-Path $prevFile)) {
         '{}' | Out-File $prevFile -Encoding utf8
         Write-Host "No previous state found — initialized empty JSON at $prevFile"
       }
 
-      # Quick sanity echo
-      Write-Host "Using TenantId: $($env:TENANT_ID)"
-      Write-Host "Report file: $reportFile"
-      Write-Host "History file: $prevFile"
+      Write-Host "Tenant: $($env:TENANT_ID)"
+      Write-Host "Report: $reportFile"
+      Write-Host "History: $prevFile"
       Write-Host "MAIL_FROM: $($env:MAIL_FROM)"
-      Write-Host "MAIL_TO: $($env:MAIL_TO)"
-      Write-Host "MAIL_TO length: $([string]::IsNullOrWhiteSpace($env:MAIL_TO) ? 0 : $env:MAIL_TO.Length)"
-
+      Write-Host "MAIL_TO:   $($env:MAIL_TO)"
 
       & "$(Build.SourcesDirectory)/Distribution_lists/DLchanges.ps1" `
-        -appId      $env:APP_ID `
-        -tenantId   $env:TENANT_ID `
-        -orgName    $env:ORG_DOMAIN `
-        -thumbprint $thumbprint `
-        -previous   $prevFile `
-        -report     $reportFile `
-        -mailFrom   $env:MAIL_FROM `
-        -mailTo     $env:MAIL_TO `
-        -mailSubject $env:MAIL_SUBJECT
+        -AppId       $env:APP_ID `
+        -TenantId    $env:TENANT_ID `
+        -OrgName     $env:ORG_DOMAIN `
+        -Thumbprint  $thumbprint `
+        -Previous    $prevFile `
+        -Report      $reportFile `
+        -MailFrom    $env:MAIL_FROM `
+        -MailTo      $env:MAIL_TO `
+        -MailSubject $env:MAIL_SUBJECT
   env:
-    # map variable-group names to environment variables
+    # variable group -> environment used above and passed into the script
     APP_ID: $(APP_ID)
     TENANT_ID: $(TENANT_ID)
     ORG_DOMAIN: $(ORG_DOMAIN)
@@ -98,7 +97,7 @@ steps:
 
 # Stage outputs for next run + artifact
 - task: PowerShell@2
-  displayName: Move output files to folder
+  displayName: Stage output files
   inputs:
     targetType: inline
     pwsh: true

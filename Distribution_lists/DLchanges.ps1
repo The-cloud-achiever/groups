@@ -1,11 +1,13 @@
 param (
-    [string]$appId,
-    [string]$orgName,
-    [string]$thumbprint,
-    [string]$previous,
-    [string]$report,
-    [string]$MAIL_FROM = $env:MAIL_FROM,
-    [string]$MAIL_T0 = $env:MAIL_TO
+    [Parameter(Mandatory)] [string]$AppId,
+    [Parameter(Mandatory)] [string]$TenantId,
+    [Parameter(Mandatory)] [string]$OrgName,
+    [Parameter(Mandatory)] [string]$Thumbprint,
+    [Parameter(Mandatory)] [string]$Previous,
+    [Parameter(Mandatory)] [string]$Report,
+    [Parameter(Mandatory)] [string]$MailFrom,
+    [Parameter(Mandatory)] [string]$MailTo,
+    [string]$MailSubject = "Distribution List Report"
 )
 
 # Helper: always return a string[] from any input shape (never $null)
@@ -16,11 +18,11 @@ function AsStringArray {
     foreach ($i in @($InputValue)) {
         if ($null -eq $i) { continue }
         if ($i -is [psobject]) {
-            if ($i.PSObject.Properties['User'])                 { $s = [string]$i.User }
+            if ($i.PSObject.Properties['User'])                  { $s = [string]$i.User }
             elseif ($i.PSObject.Properties['PrimarySmtpAddress']){ $s = [string]$i.PrimarySmtpAddress }
-            elseif ($i.PSObject.Properties['Value'])            { $s = [string]$i.Value }
-            elseif ($i.PSObject.Properties['InputObject'])      { $s = [string]$i.InputObject }
-            else                                                { $s = [string]$i }
+            elseif ($i.PSObject.Properties['Value'])             { $s = [string]$i.Value }
+            elseif ($i.PSObject.Properties['InputObject'])       { $s = [string]$i.InputObject }
+            else                                                 { $s = [string]$i }
         } else {
             $s = [string]$i
         }
@@ -30,7 +32,11 @@ function AsStringArray {
 }
 
 Write-Host "Connecting to Exchange Online..."
-Connect-ExchangeOnline -AppId $appId -Organization $orgName -CertificateThumbprint $thumbprint
+Connect-ExchangeOnline -AppId $AppId -Organization $OrgName -CertificateThumbprint $Thumbprint -ShowBanner:$false
+
+Write-Host "Connecting to Microsoft Graph (certificate auth)..."
+# Requires application permissions: Mail.Send
+Connect-MgGraph -ClientId $AppId -TenantId $TenantId -CertificateThumbprint $Thumbprint -NoWelcome
 
 Write-Host "Fetching Distribution Lists..."
 $distributionLists = Get-DistributionGroup | Sort-Object DisplayName
@@ -53,9 +59,9 @@ foreach ($distributionList in $distributionLists) {
 
 # Previous snapshot
 $oldmembers = @{}
-if (Test-Path $previous) {
-    Write-Host "Loading previous state from $previous"
-    $json = Get-Content $previous -Raw
+if (Test-Path $Previous) {
+    Write-Host "Loading previous state from $Previous"
+    $json = Get-Content $Previous -Raw
     $converted = if ($json) { $json | ConvertFrom-Json } else { $null }
     if ($converted) {
         foreach ($entry in $converted.PSObject.Properties) {
@@ -98,17 +104,8 @@ foreach ($g in $deletedGroups) {
 
 # Common groups: safe Compare-Object
 foreach ($g in $commonGroups) {
-    # Avoid inline-if-in-expression; assign first
-    $currSrc = @()
-    if ($currentMembers.ContainsKey($g)) { $currSrc = $currentMembers[$g] }
-    $oldSrc  = @()
-    if ($oldmembers.ContainsKey($g))     { $oldSrc  = $oldmembers[$g]     }
-
-    $curr = AsStringArray $currSrc
-    $old  = AsStringArray $oldSrc
-
-    if ($null -eq $curr) { $curr = @() }
-    if ($null -eq $old)  { $old  = @() }
+    $curr = AsStringArray ($currentMembers[$g])
+    $old  = AsStringArray ($oldmembers[$g])
 
     $diff    = Compare-Object -ReferenceObject $old -DifferenceObject $curr
     $added   = @($diff | Where-Object SideIndicator -eq '=>' | Select-Object -ExpandProperty InputObject | ForEach-Object { ([string]$_).Trim() })
@@ -139,7 +136,7 @@ $html = @"
 <html>
 <head>
 <style>
-    body { font-family: Arial; }
+    body { font-family: Arial, sans-serif; }
     .added { color: green; }
     .removed { color: darkorange; }
     .unchanged { color: black; }
@@ -154,12 +151,12 @@ $html = @"
 "@
 
 $html += "<h2>New Distribution Lists</h2><ul>"
-foreach ($g in $newGroups) { $html += "<li>$g</li>" }
+foreach ($g in $newGroups) { $html += "<li>$([System.Web.HttpUtility]::HtmlEncode($g))</li>" }
 if (-not $newGroups) { $html += "<li><em>None</em></li>" }
 $html += "</ul>"
 
 $html += "<h2>Deleted Distribution Lists</h2><ul>"
-foreach ($g in $deletedGroups) { $html += "<li>$g</li>" }
+foreach ($g in $deletedGroups) { $html += "<li>$([System.Web.HttpUtility]::HtmlEncode($g))</li>" }
 if (-not $deletedGroups) { $html += "<li><em>None</em></li>" }
 $html += "</ul>"
 
@@ -168,7 +165,7 @@ if ($groupsWithChanges.Keys.Count -eq 0) {
     $html += "<p><em>No changes detected.</em></p>"
 } else {
     foreach ($group in ($groupsWithChanges.Keys | Sort-Object)) {
-        $html += "<h3>$group</h3><table><tr><th>Change Type</th><th>Member</th></tr>"
+        $html += "<h3>$([System.Web.HttpUtility]::HtmlEncode($group))</h3><table><tr><th>Change Type</th><th>Member</th></tr>"
         foreach ($entry in $groupsWithChanges[$group]) {
             $cls = $entry.Type.ToLower()
             $usr = [System.Web.HttpUtility]::HtmlEncode($entry.User)
@@ -180,7 +177,7 @@ if ($groupsWithChanges.Keys.Count -eq 0) {
 
 $html += "<h2>All Groups</h2>"
 foreach ($group in ($allGroupsTable.Keys | Sort-Object)) {
-    $html += "<h3>$group</h3><table><tr><th>Change Type</th><th>Member</th></tr>"
+    $html += "<h3>$([System.Web.HttpUtility]::HtmlEncode($group))</h3><table><tr><th>Change Type</th><th>Member</th></tr>"
     foreach ($entry in $allGroupsTable[$group]) {
         $cls = $entry.Type.ToLower()
         $usr = [System.Web.HttpUtility]::HtmlEncode($entry.User)
@@ -191,70 +188,49 @@ foreach ($group in ($allGroupsTable.Keys | Sort-Object)) {
 
 $html += "</body></html>"
 
+Write-Host "Saving report to $Report"
+$html | Out-File -Encoding utf8 $Report
 
-#-----------------------
+Write-Host "Saving current DL state to $Previous"
+$currentMembers | ConvertTo-Json -Depth 5 | Out-File $Previous -Encoding utf8
 
+function Send-ReportEmail {
+    param(
+        [string]$From,
+        [string]$To,
+        [string]$Subject,
+        [string]$AttachmentPath
+    )
 
-function send_email {
-    # Uses global variables: $MAIL_FROM, $MAIL_TO, $report
-    $from    = $MAIL_FROM
-    $to      = $MAIL_TO
-    $subject = "Distribution List Report"
-    $body    = @"
-This is an auto-generated distribution list report from IT.<br><br>
-Best regards,<br>
-IT Team, IK Partners
-"@
+    if ([string]::IsNullOrWhiteSpace($From)) { Write-Warning "MAIL_FROM is empty"; return }
+    if ([string]::IsNullOrWhiteSpace($To))   { Write-Warning "MAIL_TO is empty";   return }
 
-    if ([string]::IsNullOrWhiteSpace($from)) {
-        Write-Warning "MAIL_FROM is empty or not set. Cannot send email."
-        return
-    }
-    if ([string]::IsNullOrWhiteSpace($to)) {
-        Write-Warning "MAIL_TO is empty or not set. Cannot send email."
-        return
-    }
-
-    # Prepare attachment
     $attachment = @{
         '@odata.type' = "#microsoft.graph.fileAttachment"
-        Name          = [System.IO.Path]::GetFileName($report)
-        ContentBytes  = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes($report))
+        Name          = [System.IO.Path]::GetFileName($AttachmentPath)
+        ContentBytes  = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes($AttachmentPath))
         ContentType   = "text/html"
     }
 
     $mailParams = @{
-        Subject          = $subject
-        Body             = @{
-            ContentType = "HTML"
-            Content     = $body
-        }
-        ToRecipients     = @(@{ EmailAddress = @{ Address = $to } })
-        Attachments      = @($attachment)
-        SaveToSentItems  = $true
+        Subject         = $Subject
+        Body            = @{ ContentType = "HTML"; Content = "Please find the attached Distribution List report." }
+        ToRecipients    = @(@{ EmailAddress = @{ Address = $To } })
+        Attachments     = @($attachment)
+        SaveToSentItems = $true
     }
 
     try {
-        Send-MgUserMail -UserId $from @mailParams
-        Write-Host "Email sent to $to from $from"
+        Send-MgUserMail -UserId $From @mailParams
+        Write-Host "Email sent to $To from $From"
     } catch {
         Write-Warning "Failed to send email: $_"
     }
-
-    Write-Host "my env $env:MAIL_TO , $env:MAIL_FROM"
 }
 
-
-Write-Host "Saving report to $report"
-$html | Out-File -Encoding utf8 $report
-
-Write-Host "Saving current DL state to $previous"
-$currentMembers | ConvertTo-Json -Depth 5 | Out-File $previous
-
-Write-Host "Sending Report as email attachement to $env:EMAIL_TO"
-send_email
-
-
+Write-Host "Sending report email to $MailTo"
+Send-ReportEmail -From $MailFrom -To $MailTo -Subject $MailSubject -AttachmentPath $Report
 
 Disconnect-ExchangeOnline -Confirm:$false
+Disconnect-MgGraph
 Write-Host "Done."
