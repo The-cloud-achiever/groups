@@ -243,7 +243,7 @@ function Send-ReportEmail {
     # Message object for the correct parameter set
     $message = @{
         subject      = $Subject
-        body         = @{ contentType = 'HTML'; content = 'Please find the attached Distribution List report.' }
+        body         = @{ contentType = 'HTML'; content = 'Hello \n Please find the attached Distribution List report.\n\n Best Regards\n IT Team\n IK Partners' }
         toRecipients = $recips
         attachments  = @($attachment)
     }
