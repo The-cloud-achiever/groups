@@ -246,7 +246,7 @@ function Send-ReportEmail {
         body         = @{ contentType = 'HTML'; content = @"
 Hello,<br>
 <br>
-Please find the attached Distribution List report.<br>
+Please find the attached Quaterly Distribution List report.<br>
 <br>
 Best Regards,<br>
 IT Team<br>
