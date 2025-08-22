@@ -214,37 +214,50 @@ $currentMembers | ConvertTo-Json -Depth 5 | Out-File $Previous -Encoding utf8
 
 function Send-ReportEmail {
     param(
-        [string]$From,
-        [string]$To,
-        [string]$Subject,
-        [string]$AttachmentPath
+        [Parameter(Mandatory)] [string]$From,          # UPN or userId of the mailbox to send as
+        [Parameter(Mandatory)] [string]$To,            # one or many, comma/semicolon separated
+        [Parameter(Mandatory)] [string]$Subject,
+        [Parameter(Mandatory)] [string]$AttachmentPath
     )
 
     if ([string]::IsNullOrWhiteSpace($From)) { Write-Warning "MAIL_FROM is empty"; return }
     if ([string]::IsNullOrWhiteSpace($To))   { Write-Warning "MAIL_TO is empty";   return }
+    if (-not (Test-Path $AttachmentPath))    { Write-Warning "Attachment not found: $AttachmentPath"; return }
 
+    # Build recipients (supports comma/semicolon lists)
+    $recips = @()
+    foreach ($addr in ($To -split '[;,]')) {
+        $a = $addr.Trim()
+        if ($a) { $recips += @{ emailAddress = @{ address = $a } } }
+    }
+    if ($recips.Count -eq 0) { Write-Warning "No valid recipients parsed from MAIL_TO."; return }
+
+    # Build the file attachment
     $attachment = @{
-        '@odata.type' = "#microsoft.graph.fileAttachment"
-        Name          = [System.IO.Path]::GetFileName($AttachmentPath)
-        ContentBytes  = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes($AttachmentPath))
-        ContentType   = "text/html"
+        '@odata.type' = '#microsoft.graph.fileAttachment'
+        name          = [IO.Path]::GetFileName($AttachmentPath)
+        contentBytes  = [Convert]::ToBase64String([IO.File]::ReadAllBytes($AttachmentPath))
+        contentType   = 'text/html'
     }
 
-    $mailParams = @{
-        Subject         = $Subject
-        Body            = @{ ContentType = "HTML"; Content = "Please find the attached Distribution List report." }
-        ToRecipients    = @(@{ EmailAddress = @{ Address = $To } })
-        Attachments     = @($attachment)
-        SaveToSentItems = $true
+    # Message object for the correct parameter set
+    $message = @{
+        subject      = $Subject
+        body         = @{ contentType = 'HTML'; content = 'Please find the attached Distribution List report.' }
+        toRecipients = $recips
+        attachments  = @($attachment)
     }
 
     try {
-        Send-MgUserMail -UserId $From @mailParams
-        Write-Host "Email sent to $To from $From"
-    } catch {
-        Write-Warning "Failed to send email: $_"
+        # IMPORTANT: Use -Message (or -BodyParameter). Without this, parameter binding fails.
+        Send-MgUserMail -UserId $From -Message $message -SaveToSentItems -ErrorAction Stop
+        Write-Host "Email sent to $($recips.Count) recipient(s) from $From"
+    }
+    catch {
+        Write-Warning "Failed to send email: $($_.Exception.Message)"
     }
 }
+
 
 Write-Host "Sending report email to $MailTo"
 Send-ReportEmail -From $MailFrom -To $MailTo -Subject $MailSubject -AttachmentPath $Report
