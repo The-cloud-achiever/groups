@@ -1,0 +1,61 @@
+trigger: none  # Manual or scheduled trigger only
+
+variables:
+- group: 'EntraID-Secrets'  # Secure variable group for credentials
+  inputPath: 'inputs/critical_groups.csv'
+
+pool:
+  vmImage: 'windows-latest'
+
+stages:
+- stage: 'GenerateGroupReport'
+  displayName: 'Generate rtg Group Report'
+  jobs:
+  - job: 'GroupReport'
+    displayName: 'Fetch and Compare Group Memberships'
+    steps:
+
+    # Step 1: Install Python dependencies
+    - script: |
+        pip install -r $(Build.SourcesDirectory)/IK_Test/requirements.txt
+      displayName: 'Install Python packages'
+
+    # Step 2: Install wkhtmltopdf using Chocolatey
+    - powershell: |
+        Set-ExecutionPolicy Bypass -Scope Process -Force
+        choco install wkhtmltopdf -y
+        wkhtmltopdf --version
+      displayName: 'Install wkhtmltopdf using choco'
+
+     # Step 3: Try to download previous snapshot (if any)
+    - task: DownloadPipelineArtifact@2
+      displayName: 'Download previous snapshot (non-blocking)'
+      continueOnError: true
+      inputs:
+        artifact: 'group-report-artifacts'
+        path: '$(Pipeline.Workspace)/group-report-artifacts'
+        source: 'specific'
+        project: '$(System.TeamProject)'
+        pipeline: 7
+        runVersion: 'latest'
+
+    # Step 4: Run the main script to generate the report
+    - script: |
+        python $(Build.SourcesDirectory)/IK_Test/get_test_with_sort.py
+      displayName: 'Run Group Report Script'
+      env:
+        TENANT_ID: $(TENANT_ID)
+        CLIENT_ID: $(CLIENT_ID)
+        CLIENT_SECRET: $(CLIENT_SECRET)
+        GROUPS_FILTER: $(GROUPS_FILTER)
+        BUILD_ARTIFACTSTAGINGDIRECTORY: $(Build.ArtifactStagingDirectory)
+        PIPELINE_WORKSPACE: $(Pipeline.Workspace)
+
+    # Step 5: Publish all artifacts (snapshot, comparison result, PDF)
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish group report artifacts'
+      inputs:
+        targetPath: '$(Build.ArtifactStagingDirectory)'
+        artifact: 'group-report-artifacts'
+        publishLocation: 'pipeline'
+      condition: always()
