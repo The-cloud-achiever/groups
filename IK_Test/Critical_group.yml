@@ -2,7 +2,8 @@ trigger: none  # Manual or scheduled trigger only
 
 variables:
 - group: 'EntraID-Secrets'  # Secure variable group for credentials
-  inputPath: 'inputs/critical_groups.csv'
+- name: inputPath
+  value: 'inputs/critical_groups.csv'
 
 pool:
   vmImage: 'windows-latest'
