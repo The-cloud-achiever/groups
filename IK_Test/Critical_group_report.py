@@ -47,29 +47,32 @@ def load_groups_from_csv(file_path):
 
 #---------------Get Group ids from names----------------
 def resolve_group_id_by_name(name: str) -> str:
-    # 1) try exact displayName with proper escaping + URL encoding via params
     escaped = name.replace("'", "''")
-    params = {"$filter": f"displayName eq '{escaped}'", "$count": "true"}
-    r = req.get(f"{GRAPH}/groups", headers=_headers(), params=params)
+    headers = {
+        "Authorization": f"Bearer {get_token()}",
+        "ConsistencyLevel": "eventual"
+    }
+
+    # 1) Try exact displayName match
+    params = {"$filter": f"displayName eq '{escaped}'"}
+    r = req.get("https://graph.microsoft.com/v1.0/groups", headers=headers, params=params)
     r.raise_for_status()
     data = r.json().get("value", [])
     if len(data) == 1:
         return data[0]["id"]
 
-    # 2) fallback to $search (broader match), then pick exact if present
-    params = {"$search": f'"{name}"'}
-    r = req.get(f"{GRAPH}/groups", headers=_headers(), params=params)
+    # 2) Fallback to $search
+    params = {"$search": f'"{name}"', "$count": "true"}
+    r = req.get("https://graph.microsoft.com/v1.0/groups", headers=headers, params=params)
     r.raise_for_status()
     items = r.json().get("value", [])
+    if not items:
+        raise Exception(f"Group '{name}' not found")
+
     exact = [g for g in items if g.get("displayName") == name]
     if exact:
         return exact[0]["id"]
-    if items:
-        # last resort: first hit (but log it)
-        print(f"[WARN] Using first $search match for '{name}': {items[0].get('displayName')}")
-        return items[0]["id"]
-
-    raise Exception(f"Group not found by name: {name}")
+    return items[0]["id"]
 
 def get_group_ids_from_names(names: list[str]) -> dict[str, str]:
     result = {}
