@@ -4,6 +4,7 @@ import pdfkit
 import base64
 import urllib.parse
 import unicodedata
+import re
 from datetime import datetime
 import requests as req
 from msal import ConfidentialClientApplication
