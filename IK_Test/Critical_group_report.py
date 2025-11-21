@@ -8,7 +8,28 @@ from datetime import datetime
 import requests as req
 from msal import ConfidentialClientApplication
 
+# --- Recipient helpers ---
+SEPARATORS = re.compile(r"[;, \n\r\t]+")
 
+def parse_recipients(value: str) -> list[str]:
+    """Parse a string of email addresses into a list, handling various separators and de-duplicating."""
+    if not value:
+        return []
+    items = [x.strip() for x in SEPARATORS.split(value) if x.strip()]
+    # De-dup while keeping order
+    seen = set()
+    result = []
+    for x in items:
+        if x.lower() not in seen:
+            seen.add(x.lower())
+            result.append(x)
+    return result
+
+def to_recipient_objects(addresses: list[str]) -> list[dict]:
+    """Convert emails to Graph recipient objects."""
+    return [{"emailAddress": {"address": a}} for a in addresses]
+
+#------------------- Text Normalization ------------------
 def clean_text(s: str) -> str:
     if not s:
         return ""
@@ -210,8 +231,9 @@ def generate_html_report(snapshot, output_path, added_groups, deleted_groups):
         "table { border-collapse: collapse; width: 100%; }",
         "th, td { padding: 8px 12px; border: 1px solid #ccc; text-align: left; }",
         "</style></head><body>",
-        "<h1>Azure AD Group Membership Report</h1>"
+        "<h1>Critical Group Membership Report</h1>",
         f"<p>Report generated on: <strong>{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</strong></p><br>"
+        "<p>Total Groups Analyzed: " + str(len(snapshot)) + "</p><br>"
     ]
 
     # Add added and deleted groups
@@ -278,8 +300,11 @@ def send_email(html_path, pdf_path):
     SENDER_EMAIL = os.environ.get('SENDER_EMAIL')
     RECIPIENT_EMAIL = os.environ.get('RECIPIENT_EMAIL')
 
-    if not RECIPIENT_EMAIL:
-        raise ValueError("RECIPIENT_EMAIL environment variable is not set.")
+    to_list = parse_recipients(RECIPIENT_EMAIL)
+    if not to_list:
+        raise ValueError(
+            "No recipients provided. Set RECIPIENT_EMAIL or RECIPIENT_EMAILS (comma/semicolon/space/newline separated)."
+        )
 
     token = get_token()
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
@@ -298,7 +323,7 @@ def send_email(html_path, pdf_path):
     # Add your custom message at the top of the email body
     custom_message = """
     <p>Dear recipient,</p>
-    <p>Please find the report for Azure AD Group Membership Changes. The PDF version is attached for your convenience.</p>
+    <p>Please find the report for Critical Group Membership Changes . The PDF is attached for your convinience.</p>
     <p>Best regards,<br>IT Team</p>
     <hr>
     """
@@ -306,14 +331,12 @@ def send_email(html_path, pdf_path):
 
     email_payload = {
         "message": {
-            "subject": "Report: All AD Group members",
+            "subject": "Report: Critical Group Membership changes",
             "body": {
                 "contentType": "HTML",
                 "content": full_html_body
             },
-            "toRecipients": [
-                {"emailAddress": {"address": RECIPIENT_EMAIL}}
-            ],
+            "toRecipients": to_recipient_objects(to_list),
             "attachments": [{
                 "@odata.type": "#microsoft.graph.fileAttachment",
                 "name": "group_membership_report.pdf",
