@@ -54,7 +54,7 @@ def get_group_ids_from_names(group_names):
 def get_all_group_members():
     token = get_token()
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-    groups = load_groups_from_csv('inpiuts/critical_groups.csv')
+    groups = load_groups_from_csv('inputs/critical_groups.csv')
     group_ids = get_group_ids_from_names(groups)
     print(f"Total groups: {len(groups)}") #to check if all groups are fetched
     group_members = {}
