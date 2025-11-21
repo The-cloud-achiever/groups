@@ -44,12 +44,14 @@ def get_token():
 #-----------------Load  Groups from CSV --------------
 def load_groups_from_csv(file_path):
     groups = []
-    with open(file_path, 'r', encoding='utf-8') as f:
+    # utf-8-sig strips BOM on first line automatically
+    with open(file_path, 'r', encoding='utf-8-sig') as f:
         for line in f:
             name = clean_text(line)
-            if group_name:
-                groups.append(group_name)
+            if name:
+                groups.append(name)
     return groups
+
 
 #---------------Get Group ids from names----------------
 def get_group_ids_from_names(group_names):
