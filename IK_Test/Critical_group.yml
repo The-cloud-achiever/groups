@@ -1,7 +1,7 @@
 trigger: none  # Manual or scheduled trigger only
 
 variables:
-- group: 'EntraID-Secrets'  # Secure variable group for credentials
+- group: 'Critical-Group-Vars' # Variable group containing sensitive info
 - name: inputPath
   value: 'inputs/critical_groups.csv'
 
@@ -9,11 +9,11 @@ pool:
   vmImage: 'windows-latest'
 
 stages:
-- stage: 'GenerateGroupReport'
-  displayName: 'Generate rtg Group Report'
+- stage: 'GenerateCriticalGroupReport'
+  displayName: 'Generate Critical Group Report'
   jobs:
   - job: 'GroupReport'
-    displayName: 'Fetch and Compare Group Memberships'
+    displayName: 'Fetch and load groups from csv'
     steps:
 
     # Step 1: Install Python dependencies
@@ -37,12 +37,12 @@ stages:
         path: '$(Pipeline.Workspace)/group-report-artifacts'
         source: 'specific'
         project: '$(System.TeamProject)'
-        pipeline: 7
+        pipeline: 15
         runVersion: 'latest'
 
     # Step 4: Run the main script to generate the report
     - script: |
-        python $(Build.SourcesDirectory)/IK_Test/get_test_with_sort.py
+        python $(Build.SourcesDirectory)/IK_Test/Critical_group_report.py
       displayName: 'Run Group Report Script'
       env:
         TENANT_ID: $(TENANT_ID)
