@@ -2,6 +2,7 @@ import os
 import json
 import pdfkit
 import base64
+import urllib.parse
 from datetime import datetime
 import requests as req
 from msal import ConfidentialClientApplication
@@ -36,20 +37,33 @@ def load_groups_from_csv(file_path):
     return groups
 
 #---------------Get Group ids from names----------------
-def get_group_ids_from_names(group_names): 
+def get_group_ids_from_names(group_names):
     token = get_token()
-    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
     group_ids = {}
+
     for name in group_names:
-        filter_query = f"$filter=displayName eq '{name}'"
-        url = f"https://graph.microsoft.com/v1.0/groups?{filter_query}"
+        # Escape single quotes for Graph filter syntax
+        escaped_name = name.replace("'", "''")
+
+        # URL encode only the filter value, not the whole query string
+        filter_query = f"displayName eq '{escaped_name}'"
+        encoded_query = urllib.parse.quote(filter_query, safe="=$'()")
+
+        url = f"https://graph.microsoft.com/v1.0/groups?$filter={encoded_query}"
         response = req.get(url, headers=headers)
         response.raise_for_status()
-        groups = response.json().get("value", [])
-        if groups:
-            group_ids[name] = groups[0]['id']
-    return group_ids
 
+        data = response.json().get("value", [])
+        if data:
+            group_ids[name] = data[0]["id"]
+        else:
+            print(f"[WARN] No match found for group '{name}'")
+
+    return group_ids
 
 
 #-------------Fetch Group Members------------
