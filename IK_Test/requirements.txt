@@ -2,4 +2,3 @@ requests
 msal
 datetime 
 pdfkit
-urllib.parse
