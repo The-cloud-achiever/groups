@@ -36,12 +36,13 @@ def load_groups_from_csv(file_path):
     return groups
 
 #---------------Get Group ids from names----------------
-def get_group_ids_from_names(group_names):
+def get_group_ids_from_names(group_names): 
     token = get_token()
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     group_ids = {}
     for name in group_names:
-        url = f"https://graph.microsoft.com/v1.0/groups?$filter=displayName eq '{name}'"
+        filter_query = f"$filter=displayName eq '{name}'"
+        url = f"https://graph.microsoft.com/v1.0/groups?{filter_query}"
         response = req.get(url, headers=headers)
         response.raise_for_status()
         groups = response.json().get("value", [])
