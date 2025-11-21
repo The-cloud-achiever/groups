@@ -6,6 +6,15 @@ from datetime import datetime
 import requests as req
 from msal import ConfidentialClientApplication
 
+GRAPH = "https://graph.microsoft.com/v1.0"
+
+def _headers():
+    return {
+        "Authorization": f"Bearer {get_token()}",
+        "Content-Type": "application/json",
+        "ConsistencyLevel": "eventual"  # needed for $search and $count
+    }
+
 # ------------------ Authentication ------------------
 filter_query = os.environ.get('GROUPS_FILTER')
 def get_token():
@@ -37,18 +46,41 @@ def load_groups_from_csv(file_path):
     return groups
 
 #---------------Get Group ids from names----------------
-def get_group_ids_from_names(group_names):
-    token = get_token()
-    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-    group_ids = {}
-    for name in group_names:
-        url = f"https://graph.microsoft.com/v1.0/groups?$filter=displayName eq '{name}'"
-        response = req.get(url, headers=headers)
-        response.raise_for_status()
-        groups = response.json().get("value", [])
-        if groups:
-            group_ids[name] = groups[0]['id']
-    return group_ids
+def resolve_group_id_by_name(name: str) -> str:
+    # 1) try exact displayName with proper escaping + URL encoding via params
+    escaped = name.replace("'", "''")
+    params = {"$filter": f"displayName eq '{escaped}'", "$count": "true"}
+    r = req.get(f"{GRAPH}/groups", headers=_headers(), params=params)
+    r.raise_for_status()
+    data = r.json().get("value", [])
+    if len(data) == 1:
+        return data[0]["id"]
+
+    # 2) fallback to $search (broader match), then pick exact if present
+    params = {"$search": f'"{name}"'}
+    r = req.get(f"{GRAPH}/groups", headers=_headers(), params=params)
+    r.raise_for_status()
+    items = r.json().get("value", [])
+    exact = [g for g in items if g.get("displayName") == name]
+    if exact:
+        return exact[0]["id"]
+    if items:
+        # last resort: first hit (but log it)
+        print(f"[WARN] Using first $search match for '{name}': {items[0].get('displayName')}")
+        return items[0]["id"]
+
+    raise Exception(f"Group not found by name: {name}")
+
+def get_group_ids_from_names(names: list[str]) -> dict[str, str]:
+    result = {}
+    for n in names:
+        try:
+            result[n] = resolve_group_id_by_name(n)
+        except Exception as e:
+            print(f"[ERROR] Failed to resolve '{n}': {e}")
+            # optionally continue or re-raise based on your policy
+            raise
+    return result
 
 #-------------Fetch Group Members------------
 def get_all_group_members():
