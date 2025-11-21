@@ -67,40 +67,53 @@ def get_group_ids_from_names(group_names):
 
 
 #-------------Fetch Group Members------------
+# ------------- Fetch members for ONE group (handles paging) -------------
+def fetch_group_members(group_id, headers):
+    url = f"https://graph.microsoft.com/v1.0/groups/{group_id}/members?$select=id,displayName,userPrincipalName&$top=999"
+    members = []
+    while url:
+        r = req.get(url, headers=headers)
+        r.raise_for_status()
+        j = r.json()
+        for m in j.get("value", []):
+            # some members (SPNs/devices/groups) won’t have UPN
+            members.append(m.get("displayName") or m.get("id"))
+        url = j.get("@odata.nextLink")
+    return members
+
+# ------------- Get ALL group members using resolved IDs -------------
 def get_all_group_members():
     token = get_token()
-    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-    groups = load_groups_from_csv('inputs/critical_groups.csv')
-    group_ids = get_group_ids_from_names(groups)
-    print(f"Total groups: {len(groups)}") #to check if all groups are fetched
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+
+    # 1) load names from CSV (one name per line)
+    group_names = load_groups_from_csv('inputs/critical_groups.csv')
+
+    # 2) resolve names -> IDs (uses your fixed get_group_ids_from_names)
+    name_to_id = get_group_ids_from_names(group_names)
+
+    print(f"Total groups in input: {len(group_names)}")
+    print(f"Resolved IDs: {len(name_to_id)}")
+
+    # 3) fetch members per group id
     group_members = {}
-    batch_requests = []
-    batch_size = 20
-    batch_counter = 1
-
-    for group in groups:
-        batch_requests.append({
-            "id": str(batch_counter),
-            "method": "GET",
-            "url": f"/groups/{group['id']}/members"
-        })
-        batch_counter += 1
-
-        if len(batch_requests) == batch_size or group == groups[-1]:
-            batch_payload = {"requests": batch_requests}
-            response = req.post("https://graph.microsoft.com/v1.0/$batch", headers=headers, json=batch_payload)
-            response.raise_for_status()
-
-            results = response.json()["responses"]
-            for result in results:
-                idx = int(result["id"]) - 1
-                group_name = groups[idx]["displayName"]
-                if result["status"] == 200:
-                    members = [m["displayName"] for m in result["body"].get("value", [])]
-                    group_members[group_name] = members
-            batch_requests = []
+    for name in group_names:
+        gid = name_to_id.get(name)
+        if not gid:
+            print(f"[WARN] Skipping '{name}' – no GroupId resolved.")
+            continue
+        try:
+            members = fetch_group_members(gid, headers)
+            group_members[name] = sorted(set(members))
+        except Exception as e:
+            print(f"[ERROR] Members fetch failed for '{name}' ({gid}): {e}")
+            raise
 
     return group_members
+
 
 # ------------------ Snapshot Handling ------------------
 def load_previous_snapshot():
