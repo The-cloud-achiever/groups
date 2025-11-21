@@ -6,17 +6,6 @@ from datetime import datetime
 import requests as req
 from msal import ConfidentialClientApplication
 
-GRAPH = "https://graph.microsoft.com/v1.0"
-
-def _auth_headers():
-    return {"Authorization": f"Bearer {get_token()}"}
-
-def _adv_headers():
-    # For $search or when using $count
-    h = _auth_headers()
-    h["ConsistencyLevel"] = "eventual"
-    return h
-
 # ------------------ Authentication ------------------
 def get_token():
     tenant_id = os.environ.get('TENANT_ID')
@@ -47,54 +36,19 @@ def load_groups_from_csv(file_path):
     return groups
 
 #---------------Get Group ids from names----------------
-def resolve_group_id_by_name(name: str) -> str:
-    # 1) exact match
-    escaped = name.replace("'", "''")
-    params = {"$filter": f"displayName eq '{escaped}'", "$select": "id,displayName"}
-    r = req.get(f"{GRAPH}/groups", headers=_auth_headers(), params=params)
-    r.raise_for_status()
-    v = r.json().get("value", [])
-    if len(v) == 1:
-        return v[0]["id"]
-    exact = [g for g in v if g.get("displayName") == name]
-    if exact:
-        return exact[0]["id"]
+def get_group_ids_from_names(group_names):
+    token = get_token()
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    group_ids = {}
+    for name in group_names:
+        url = f"https://graph.microsoft.com/v1.0/groups?$filter=displayName eq '{name}'"
+        response = req.get(url, headers=headers)
+        response.raise_for_status()
+        groups = response.json().get("value", [])
+        if groups:
+            group_ids[name] = groups[0]['id']
+    return group_ids
 
-    # 2) prefix only (works for short names like 'HR' and for 'IK Accounting')
-    params = {
-        "$filter": f"startswith(displayName,'{escaped}')",
-        "$select": "id,displayName",
-        "$orderby": "displayName",
-        "$top": "10"
-    }
-    r = req.get(f"{GRAPH}/groups", headers=_auth_headers(), params=params)
-    r.raise_for_status()
-    v = r.json().get("value", [])
-    if v:
-        exact = [g for g in v if g.get("displayName") == name]
-        return (exact[0] if exact else v[0])["id"]
-
-    # 3) last resort ($search) — only for names >= 3 chars
-    if len(name) >= 3:
-        params = {"$search": f'"{name}"', "$count": "true", "$select": "id,displayName"}
-        r = req.get(f"{GRAPH}/groups", headers=_adv_headers(), params=params)
-        r.raise_for_status()
-        v = r.json().get("value", [])
-        if v:
-            exact = [g for g in v if g.get("displayName") == name]
-            return (exact[0] if exact else v[0])["id"]
-
-    raise Exception(f"Group not found or resolvable by name: {name}")
-
-def get_group_ids_from_names(names: list[str]) -> dict[str, str]:
-    out = {}
-    for n in names:
-        try:
-            out[n] = resolve_group_id_by_name(n)
-        except Exception as e:
-            print(f"[ERROR] Failed to resolve '{n}': {e}")
-            raise
-    return out
 
 
 #-------------Fetch Group Members------------
