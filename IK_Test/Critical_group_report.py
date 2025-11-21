@@ -48,43 +48,41 @@ def load_groups_from_csv(file_path):
 
 #---------------Get Group ids from names----------------
 def resolve_group_id_by_name(name: str) -> str:
-    # 1) exact match via $filter (handles &, quotes via params + escaping)
+    # 1) exact match
     escaped = name.replace("'", "''")
     params = {"$filter": f"displayName eq '{escaped}'", "$select": "id,displayName"}
     r = req.get(f"{GRAPH}/groups", headers=_auth_headers(), params=params)
     r.raise_for_status()
-    value = r.json().get("value", [])
-    if len(value) == 1:
-        return value[0]["id"]
-    # if multiple (rare with eq), try to pick exact
-    exact = [g for g in value if g.get("displayName") == name]
+    v = r.json().get("value", [])
+    if len(v) == 1:
+        return v[0]["id"]
+    exact = [g for g in v if g.get("displayName") == name]
     if exact:
         return exact[0]["id"]
 
-    # 2) prefix/fuzzy via startsWith (works even for short names like 'HR')
+    # 2) prefix only (works for short names like 'HR' and for 'IK Accounting')
     params = {
-        "$filter": f"startsWith(displayName,'{escaped}') or contains(displayName,'{escaped}')",
+        "$filter": f"startswith(displayName,'{escaped}')",
         "$select": "id,displayName",
         "$orderby": "displayName",
         "$top": "10"
     }
     r = req.get(f"{GRAPH}/groups", headers=_auth_headers(), params=params)
     r.raise_for_status()
-    value = r.json().get("value", [])
-    if value:
-        # prefer exact name if present among results
-        exact = [g for g in value if g.get("displayName") == name]
-        return (exact[0] if exact else value[0])["id"]
+    v = r.json().get("value", [])
+    if v:
+        exact = [g for g in v if g.get("displayName") == name]
+        return (exact[0] if exact else v[0])["id"]
 
-    # 3) last resort: $search (only if length >= 3, requires ConsistencyLevel + $count)
+    # 3) last resort ($search) — only for names >= 3 chars
     if len(name) >= 3:
         params = {"$search": f'"{name}"', "$count": "true", "$select": "id,displayName"}
         r = req.get(f"{GRAPH}/groups", headers=_adv_headers(), params=params)
         r.raise_for_status()
-        value = r.json().get("value", [])
-        if value:
-            exact = [g for g in value if g.get("displayName") == name]
-            return (exact[0] if exact else value[0])["id"]
+        v = r.json().get("value", [])
+        if v:
+            exact = [g for g in v if g.get("displayName") == name]
+            return (exact[0] if exact else v[0])["id"]
 
     raise Exception(f"Group not found or resolvable by name: {name}")
 
