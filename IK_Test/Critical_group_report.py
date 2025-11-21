@@ -3,10 +3,25 @@ import json
 import pdfkit
 import base64
 import urllib.parse
+import unicodedata
 from datetime import datetime
 import requests as req
 from msal import ConfidentialClientApplication
 
+
+def clean_text(s: str) -> str:
+    if not s:
+        return ""
+    # strip BOM, trim, normalize accents to NFC
+    return unicodedata.normalize("NFC", s.lstrip("\ufeff").strip())
+
+def normalize_snapshot_keys(snap: dict) -> dict:
+    """Normalize group names and member names inside a snapshot dict."""
+    fixed = {}
+    for k, v in (snap or {}).items():
+        nk = clean_text(k)
+        fixed[nk] = sorted({ clean_text(m) for m in (v or []) })
+    return fixed
 # ------------------ Authentication ------------------
 def get_token():
     tenant_id = os.environ.get('TENANT_ID')
@@ -31,7 +46,7 @@ def load_groups_from_csv(file_path):
     groups = []
     with open(file_path, 'r', encoding='utf-8') as f:
         for line in f:
-            group_name = line.strip()
+            name = clean_text(line)
             if group_name:
                 groups.append(group_name)
     return groups
@@ -66,9 +81,9 @@ def get_group_ids_from_names(group_names):
     return group_ids
 
 
-#-------------Fetch Group Members------------
 # ------------- Fetch members for ONE group (handles paging) -------------
 def fetch_group_members(group_id, headers):
+    # Pull members with paging; keep displayName normalized
     url = f"https://graph.microsoft.com/v1.0/groups/{group_id}/members?$select=id,displayName,userPrincipalName&$top=999"
     members = []
     while url:
@@ -76,59 +91,63 @@ def fetch_group_members(group_id, headers):
         r.raise_for_status()
         j = r.json()
         for m in j.get("value", []):
-            # some members (SPNs/devices/groups) won’t have UPN
-            members.append(m.get("displayName") or m.get("id"))
+            dn = clean_text(m.get("displayName") or m.get("id"))
+            members.append(dn)
         url = j.get("@odata.nextLink")
     return members
 
-# ------------- Get ALL group members using resolved IDs -------------
 def get_all_group_members():
     token = get_token()
     headers = {
         "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
     }
 
-    # 1) load names from CSV (one name per line)
+    # 1) load names (one per line)
     group_names = load_groups_from_csv('inputs/critical_groups.csv')
 
-    # 2) resolve names -> IDs (uses your fixed get_group_ids_from_names)
+    # 2) resolve names -> IDs (uses your safe resolver)
     name_to_id = get_group_ids_from_names(group_names)
 
     print(f"Total groups in input: {len(group_names)}")
     print(f"Resolved IDs: {len(name_to_id)}")
 
-    # 3) fetch members per group id
+    # 3) fetch and normalize
     group_members = {}
     for name in group_names:
         gid = name_to_id.get(name)
         if not gid:
             print(f"[WARN] Skipping '{name}' – no GroupId resolved.")
             continue
-        try:
-            members = fetch_group_members(gid, headers)
-            group_members[name] = sorted(set(members))
-        except Exception as e:
-            print(f"[ERROR] Members fetch failed for '{name}' ({gid}): {e}")
-            raise
+        members = fetch_group_members(gid, headers)
+        group_members[clean_text(name)] = sorted(set(clean_text(x) for x in members))
 
     return group_members
 
 
+
 # ------------------ Snapshot Handling ------------------
 def load_previous_snapshot():
-    path = os.path.join(os.environ.get("PIPELINE_WORKSPACE", "./"),"group-report-artifacts","previous_snapshot.json")
+    path = os.path.join(
+        os.environ.get("PIPELINE_WORKSPACE", "./"),
+        "group-report-artifacts",
+        "previous_snapshot.json",
+    )
     if os.path.exists(path):
         with open(path, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            data = json.load(f)
+        return normalize_snapshot_keys(data)
     print("No previous snapshot found, treating this as first run.")
     return {}
+
 
 def save_current_snapshot(data):
     artifacts_dir = os.environ.get('BUILD_ARTIFACTSTAGINGDIRECTORY', './pipeline-artifacts')
     os.makedirs(artifacts_dir, exist_ok=True)
+    # normalize before save; ensure_ascii=False keeps accented chars as-is
+    norm = normalize_snapshot_keys(data)
     with open(os.path.join(artifacts_dir, 'previous_snapshot.json'), 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=2)
+        json.dump(norm, f, indent=2, ensure_ascii=False)
 
 # ------------------ Comparison Logic ------------------
 def compare_snapshots(current, previous):
@@ -249,7 +268,7 @@ def generate_html_report(snapshot, output_path, added_groups, deleted_groups):
 
 #-------------------Generate PDF Report----------
 def generate_pdf_report(html_path, pdf_path):
-    pdfkit.from_file(html_path, pdf_path)
+    pdfkit.from_file(html_path, pdf_path, options={'encoding': "UTF-8"})
     print(f"PDF report saved to: {pdf_path}")
    
 #------------------Email report----------
@@ -333,7 +352,7 @@ def main():
 
     # Save comparison result
     with open(os.path.join(artifacts_dir, 'comparison_result.json'), 'w', encoding='utf-8') as f:
-        json.dump(snapshot, f, indent=2)
+        json.dump(snapshot, f, indent=2, ensure_ascii=False)
 
     # Generate HTML report
     html_report_path = os.path.join(artifacts_dir, 'group_membership_report.html')
