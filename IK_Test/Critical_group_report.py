@@ -340,7 +340,7 @@ def send_email(html_path, pdf_path):
             "toRecipients": to_recipient_objects(to_list),
             "attachments": [{
                 "@odata.type": "#microsoft.graph.fileAttachment",
-                "name": "group_membership_report.pdf",
+                "name": "Critical_groups_membership_report.pdf",
                 "contentBytes": base64.b64encode(pdf_content).decode('utf-8')
             }]
         },
@@ -381,12 +381,12 @@ def main():
         json.dump(snapshot, f, indent=2, ensure_ascii=False)
 
     # Generate HTML report
-    html_report_path = os.path.join(artifacts_dir, 'group_membership_report.html')
+    html_report_path = os.path.join(artifacts_dir, 'Critical_groups_membership_report{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.html')
     generate_html_report(snapshot, html_report_path, added_groups, deleted_groups)
     print(f"HTML report saved to: {html_report_path}")
 
     # Generate PDF report
-    pdf_report_path = os.path.join(artifacts_dir, 'group_membership_report.pdf')
+    pdf_report_path = os.path.join(artifacts_dir, 'Critical_groups_membership_report{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.pdf')
     generate_pdf_report(html_report_path, pdf_report_path)
     
     # Send email
