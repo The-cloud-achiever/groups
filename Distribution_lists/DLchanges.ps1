@@ -47,13 +47,26 @@ $currentMembers = @{}
 foreach ($distributionList in $distributionLists) {
     $display = $distributionList.DisplayName
     if (-not $display) { continue }
-    try {
-        $members = Get-DistributionGroupMember -Identity $distributionList.PrimarySmtpAddress `
-                 | Select-Object -ExpandProperty PrimarySmtpAddress
-        $currentMembers[$display] = AsStringArray $members
-    } catch {
-        Write-Warning "Unable to fetch members for $display : $_"
-        $currentMembers[$display] = @()
+    $maxRetries = 3
+    $retryDelay = 10
+    $success = $false
+    for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
+        try {
+            $members = Get-DistributionGroupMember -Identity $distributionList.PrimarySmtpAddress `
+                     | Select-Object -ExpandProperty PrimarySmtpAddress
+            $currentMembers[$display] = AsStringArray $members
+            $success = $true
+            break
+        } catch {
+            if ($attempt -lt $maxRetries) {
+                Write-Warning "Attempt $attempt failed for $display. Retrying in $retryDelay seconds..."
+                Start-Sleep -Seconds $retryDelay
+                $retryDelay *= 2
+            } else {
+                Write-Warning "Unable to fetch members for $display : $_"
+                $currentMembers[$display] = @()
+            }
+        }
     }
 }
 
@@ -165,7 +178,7 @@ $html = @"
 </style>
 </head>
 <body>
-<h1>Distribution List Membership Report - $(Get-Date -Format 'yyyy-MM-dd')</h1>
+<h1>Distribution List Membership Report </h1>
 "@
 
 $html += "<h2>New Distribution Lists</h2><ul>"
