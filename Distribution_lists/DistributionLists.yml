@@ -10,16 +10,16 @@ steps:
 - checkout: self
 
 # Download previous state/report from last successful build of pipeline 11
-# - task: DownloadPipelineArtifact@2
-#   displayName: Download Previous DL State
-#   continueOnError: true
-#   inputs:
-#     artifact: 'DLReport'
-#     path: '$(Build.SourcesDirectory)/prev'
-#     source: 'specific'
-#     project: '$(System.TeamProject)'
-#     pipeline: 11
-#     runVersion: 'latest'
+- task: DownloadPipelineArtifact@2
+  displayName: Download Previous DL State
+  continueOnError: true
+  inputs:
+    artifact: 'DLReport'
+    path: '$(Build.SourcesDirectory)/prev'
+    source: 'specific'
+    project: '$(System.TeamProject)'
+    pipeline: 11
+    runVersion: 'latest'
 
 # Download certificate (PFX) from Secure Files
 - task: DownloadSecureFile@1
