@@ -135,7 +135,6 @@ def sync_members_delta(group_id, headers, state):
     is_first = group_id not in state["members_delta_links"]
     url = (
         f"https://graph.microsoft.com/v1.0/groups/{group_id}/members/delta"
-        f"?$select=displayName,mail,userPrincipalName"
         if is_first else state["members_delta_links"][group_id]
     )
 
