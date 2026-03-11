@@ -8,10 +8,10 @@ pool:
 
 stages:
 - stage: 'GenerateGroupReport'
-  displayName: 'Generate rtg Group Report'
+  displayName: 'Generate Group Report'
   jobs:
   - job: 'GroupReport'
-    displayName: 'Fetch and Compare Group Memberships'
+    displayName: 'Fetch Group Memberships (Delta)'
     steps:
 
     # Step 1: Install Python dependencies
@@ -19,16 +19,18 @@ stages:
         pip install -r $(Build.SourcesDirectory)/IK_Test/requirements.txt
       displayName: 'Install Python packages'
 
-    # Step 2: Install wkhtmltopdf using Chocolatey
+    # Step 2: Install wkhtmltopdf and ensure it is on PATH for subsequent steps
     - powershell: |
         Set-ExecutionPolicy Bypass -Scope Process -Force
         choco install wkhtmltopdf -y
+        $wkPath = 'C:\Program Files\wkhtmltopdf\bin'
+        Write-Host "##vso[task.prependpath]$wkPath"
         wkhtmltopdf --version
-      displayName: 'Install wkhtmltopdf using choco'
+      displayName: 'Install wkhtmltopdf'
 
-     # Step 3: Try to download previous snapshot (if any)
+    # Step 3: Download previous delta state (non-blocking — missing on first run)
     - task: DownloadPipelineArtifact@2
-      displayName: 'Download previous snapshot (non-blocking)'
+      displayName: 'Download previous delta state'
       continueOnError: true
       inputs:
         artifact: 'group-report-artifacts'
@@ -38,19 +40,21 @@ stages:
         pipeline: 7
         runVersion: 'latest'
 
-    # Step 4: Run the main script to generate the report
+    # Step 4: Run the delta report script
     - script: |
         python $(Build.SourcesDirectory)/IK_Test/get_test_with_sort.py
-      displayName: 'Run Group Report Script'
+      displayName: 'Run Group Delta Report'
       env:
         TENANT_ID: $(TENANT_ID)
         CLIENT_ID: $(CLIENT_ID)
         CLIENT_SECRET: $(CLIENT_SECRET)
         GROUPS_FILTER: $(GROUPS_FILTER)
+        SENDER_EMAIL: $(SENDER_EMAIL)
+        RECIPIENT_EMAIL: $(RECIPIENT_EMAIL)
         BUILD_ARTIFACTSTAGINGDIRECTORY: $(Build.ArtifactStagingDirectory)
         PIPELINE_WORKSPACE: $(Pipeline.Workspace)
 
-    # Step 5: Publish all artifacts (snapshot, comparison result, PDF)
+    # Step 5: Publish delta state + reports for the next run
     - task: PublishPipelineArtifact@1
       displayName: 'Publish group report artifacts'
       inputs:
